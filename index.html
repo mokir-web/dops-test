@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>MoraDOPS</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
   <meta name="format-detection" content="telephone=no">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'><circle cx='22' cy='22' r='17' fill='none' stroke='%232a1f18' stroke-width='2'/><text x='22' y='27' font-family='Arial' font-size='13' font-weight='700' fill='%232a1f18' text-anchor='middle'>MD</text><circle cx='35' cy='35' r='8' fill='%234a9e62'/></svg>">
@@ -29,6 +30,7 @@
     .checkbox-group input[type=checkbox] { flex-shrink: 0; margin-top: 3px; width: 18px; height: 18px; cursor: pointer; }
 
     .scale-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+    .kb-focused { outline: 2px solid #3d5c4a; outline-offset: 6px; border-radius: 6px; }
     .scale-group label {
       display: flex; flex-direction: column; align-items: center;
       cursor: pointer; font-size: 15px;
@@ -641,13 +643,17 @@
         <p>MoraDOPS är ett digitalt bedömningssystem för läkare under utbildning. Systemet ersätter tidigare bedömningsformulär i pappersform och samlar alla bedömningar på ett ställe för tillgänglighet och överblick.</p>
 
         <div class="section-header">Formulärtyper</div>
-        <p><strong>DOPS</strong> (Direct Observation of Procedural Skills) – används för att bedöma praktiska färdigheter vid specifika kirurgiska ingrepp eller åtgärder.</p>
-        <p><strong>Mini-CEX</strong> (Mini Clinical Evaluation Exercise) – en kortare strukturerad observation av kliniskt arbete, t.ex. ett patientmöte eller rond.</p>
+        <p><strong>DOPS</strong> (Direct Observation of Procedural Skills) – strukturerad bedömning av tekniska färdigheter vid kirurgiska ingrepp eller procedurer, baserad på direktobservation. ST-läkaren tar initiativ till bedömningen. Varje DOPS ska representera olika ingrepp. Bedömningen genomförs under ca 20 minuter, följt av ca 5 minuters återkoppling. Specifika mallar finns för: Laparoskopisk appendektomi, Öppen appendektomi, Kolecystektomi, Laparotomi/tarmresektion/stomi (Tarmresektion), Partiell mastektomi + sentinel node, Öppet ljumskbråck, Endoskopiskt ljumskbråck, Främre nätplastik, LGBP, Gastroskopi, samt Allmän DOPS för övriga ingrepp.</p>
+        <p><strong>Mini-CEX</strong> (Mini Clinical Evaluation Exercise) – kortare strukturerad observation av kliniskt arbete, t.ex. ett patientmöte eller rond. Bedömningen fokuserar på anamnestagning, klinisk undersökning, professionellt förhållningssätt och klinisk bedömningsförmåga. Skala 1–6: 1–2 otillfredsställande, 3–4 tillfredsställande, 5–6 utmärkt.</p>
+        <p><strong>CBD</strong> (Case-Based Discussion) – strukturerad diskussion av ett kliniskt fall som ST-läkaren handlagt. ST-läkaren väljer ut två färska fall med journalanteckningar; bedömaren väljer ett. Diskussionen tar ca 20 minuter och fokuserar på journalanteckning, klinisk bedömning, val av undersökningar, behandling, uppföljning och professionalism. Skala 1–6.</p>
         <p><strong>360 GRADER</strong> – strukturerad feedback från kollegor, sjuksköterskor och annan personal om professionellt bemötande och samarbete.</p>
         <p><strong>Återkoppling efter muntlig presentation</strong> – strukturerad bedömning efter journalgenomgång, fallpresentation eller liknande.</p>
         <p><strong>Videogranskning</strong> – bedömning från analys av inspelad operation.</p>
         <p><strong>Självskattning inför specialistkollegium</strong> – ST-läkarens egen bedömning av sina kompetenser inför specialistkollegium.</p>
         <p><strong>Rapport från specialistkollegium</strong> – handledare och specialisters samlade bedömning efter genomfört specialistkollegium.</p>
+
+        <div class="section-header">Skalbeskrivningar</div>
+        <p>Alla skalfrågor visar en beskrivning av vad varje nivå innebär direkt i formuläret. Ankarpunkter för nivå 1 (bristfällig/otillfredsställande), 3 (acceptabel/tillfredsställande) och 5 eller 6 (utmärkt) är hämtade ordagrant från respektive bedömningsmall. Mellannivåerna 2 och 4 är interpolerade.</p>
 
         <div class="section-header">Behörighetsnivåer</div>
         <p>Systemet använder en hierarki för vem som kan bedöma vem. Specialister (Spec) kan bedöma alla. ST-läkare kan bedöma AT- och BT-läkare. Rollen sätts vid registrering och kan ändras under Min profil. Det är vid registrering och under profil möjligt att välja om användaren ska både kunna registrera och ta emot bedömningar.</p>
@@ -1055,7 +1061,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.9.1';
+    const APP_VERSION = 'v3.9.2';
 
     let appData = null;
     let currentUser = null;
@@ -1537,6 +1543,7 @@
 
     function showSection(sectionName) {
       currentSection = sectionName;
+      _kbFocusIdx = -1;
       const container = document.getElementById('form-questions');
       container.innerHTML = '';
       show('submit-btn', false);
@@ -1954,7 +1961,10 @@
             answersDiv.appendChild(s);
           }
           const r = document.createElement('div');
-          r.className = 'ans-row'; r.textContent = `${ans.question || ''}: ${ans.answer || ''}`;
+          r.className = 'ans-row';
+          const desc = appData?.formDescriptions?.[a.formType]?.[ans.question] || '';
+          const displayAnswer = formatScaleAnswer(a.formType, ans.question, ans.answer, desc);
+          r.textContent = `${ans.question || ''}: ${displayAnswer}`;
           answersDiv.appendChild(r);
         });
         toggleBtn.onclick = () => {
@@ -2095,7 +2105,10 @@
             answersDiv.appendChild(s);
           }
           const r = document.createElement('div');
-          r.className = 'ans-row'; r.textContent = `${ans.question}: ${ans.answer}`;
+          r.className = 'ans-row';
+          const desc = appData?.formDescriptions?.[a.formType]?.[ans.question] || '';
+          const displayAnswer = formatScaleAnswer(a.formType, ans.question, ans.answer, desc);
+          r.textContent = `${ans.question}: ${displayAnswer}`;
           answersDiv.appendChild(r);
         });
         toggleBtn.onclick = () => {
@@ -3440,6 +3453,7 @@
     async function toggleSchedule(id) {
       try { await api('toggleScheduleActive', { id }); loadSchedules(); } catch(e) {}
     }
+    async function deleteSchedule(id) {
       if (!confirm('Ta bort detta schema?')) return;
       await api('deleteScheduledEmail', { id });
       loadSchedules();
@@ -3753,30 +3767,141 @@
     }
 
     // ── Enter/tangentbordsnavigering i formulärsektion ─────────────
+    let _kbFocusIdx = -1;
+
+    function _getFormFields() {
+      return Array.from(document.querySelectorAll('#form-questions .field'));
+    }
+
+    function _setFieldFocus(idx) {
+      const fields = _getFormFields();
+      if (idx < 0 || idx >= fields.length) return;
+      _kbFocusIdx = idx;
+      fields.forEach((f, i) => f.classList.toggle('kb-focused', i === idx));
+      const field = fields[idx];
+      // Focus first focusable input in the field
+      const inp = field.querySelector('input:not([type=hidden]), textarea, select');
+      if (inp) { inp.focus(); }
+      field.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    function _advanceField() {
+      const fields = _getFormFields();
+      const next = _kbFocusIdx + 1;
+      if (next < fields.length) {
+        _setFieldFocus(next);
+      } else {
+        // Try Nästa-knapp or submit
+        const nextBtn = document.querySelector('#form-questions .btn-row button.btn-primary');
+        if (nextBtn) { fields.forEach(f => f.classList.remove('kb-focused')); nextBtn.focus(); }
+        else {
+          const sub = document.getElementById('submit-btn');
+          if (sub && !sub.classList.contains('hidden')) { fields.forEach(f => f.classList.remove('kb-focused')); sub.focus(); }
+        }
+      }
+    }
+
     function setupSectionKeyboard() {
-      // Skalfrågor: sifferknappar väljer alternativ
       document.addEventListener('keydown', e => {
         const panel = document.getElementById('panel-assessment');
         if (!panel || panel.classList.contains('hidden')) return;
+
         const active = document.activeElement;
-        // Skalfråga: om ett radio i scale-group är fokuserat, välj med siffra
-        if (active && active.type === 'radio' && active.closest('.scale-group')) {
+        const formEl = document.getElementById('form-questions');
+        const inForm = active && formEl && formEl.contains(active);
+
+        // Update _kbFocusIdx from active element
+        if (inForm) {
+          const fields = _getFormFields();
+          const fd = active.closest('.field');
+          if (fd) {
+            const idx = fields.indexOf(fd);
+            if (idx !== -1 && idx !== _kbFocusIdx) {
+              _kbFocusIdx = idx;
+              fields.forEach((f, i) => f.classList.toggle('kb-focused', i === idx));
+            }
+          }
+        }
+
+        const isScale   = active?.type === 'radio' && active.closest('.scale-group');
+        const isRadio   = active?.type === 'radio' && !active.closest('.scale-group');
+        const isTA      = active?.tagName === 'TEXTAREA';
+        const isNextBtn = active === document.querySelector('#form-questions .btn-row button.btn-primary');
+        const isSubmit  = active === document.getElementById('submit-btn');
+
+        // ── Tab ──
+        if (e.key === 'Tab') {
+          if (!inForm && !isNextBtn && !isSubmit) return;
+          e.preventDefault();
+          if (e.shiftKey) {
+            if (_kbFocusIdx > 0) _setFieldFocus(_kbFocusIdx - 1);
+          } else {
+            if (isNextBtn) { document.querySelector('#form-questions .btn-row button.btn-primary')?.click(); }
+            else if (isSubmit) { document.getElementById('submit-btn')?.click(); }
+            else _advanceField();
+          }
+          return;
+        }
+
+        // ── Enter ──
+        if (e.key === 'Enter') {
+          if (isTA) { e.preventDefault(); _advanceField(); return; }
+          if (isScale) { e.preventDefault(); _advanceField(); return; }
+          if (isRadio) { e.preventDefault(); if (!active.checked) active.checked = true; _advanceField(); return; }
+          if (isNextBtn) { return; } // browser default click
+          if (inForm) {
+            const nextBtn = document.querySelector('#form-questions .btn-row button.btn-primary');
+            if (nextBtn) { e.preventDefault(); nextBtn.click(); }
+          }
+          return;
+        }
+
+        // ── Pil upp/ned → byt fråga ──
+        if (e.key === 'ArrowUp' && inForm) {
+          e.preventDefault();
+          if (_kbFocusIdx > 0) _setFieldFocus(_kbFocusIdx - 1);
+          return;
+        }
+        if (e.key === 'ArrowDown' && inForm) {
+          e.preventDefault();
+          _advanceField();
+          return;
+        }
+
+        // ── Pil vänster/höger → byt val inom skalfråga ──
+        if (e.key === 'ArrowLeft' && isScale) {
+          e.preventDefault();
+          const radios = Array.from(active.closest('.scale-group').querySelectorAll('input[type=radio]'));
+          const i = radios.indexOf(active);
+          if (i > 0) { radios[i-1].checked = true; radios[i-1].focus(); }
+          return;
+        }
+        if (e.key === 'ArrowRight' && isScale) {
+          e.preventDefault();
+          const radios = Array.from(active.closest('.scale-group').querySelectorAll('input[type=radio]'));
+          const i = radios.indexOf(active);
+          if (i < radios.length - 1) { radios[i+1].checked = true; radios[i+1].focus(); }
+          return;
+        }
+
+        // ── Siffra → välj och gå vidare (skalfråga) ──
+        if (isScale) {
           const num = parseInt(e.key);
           if (!isNaN(num) && num >= 0 && num <= 9) {
-            const radio = document.querySelector(`input[type=radio][name="${active.name}"][value="${num}"]`);
-            if (radio) { radio.checked = true; radio.focus(); e.preventDefault(); }
+            const radio = active.closest('.scale-group').querySelector(`input[type=radio][value="${num}"]`);
+            if (radio) {
+              e.preventDefault();
+              radio.checked = true; radio.focus();
+              setTimeout(() => _advanceField(), 120);
+            }
           }
         }
-        // Nästa-/skicka-knapp med Enter när textarea är aktiv och Ctrl hålls
-        if (e.key === 'Enter' && e.ctrlKey && active && active.tagName === 'TEXTAREA') {
-          e.preventDefault();
-          const nextBtn = document.querySelector('#form-questions .btn-row button.btn-primary');
-          if (nextBtn) nextBtn.click();
-          else {
-            const submitBtn = document.getElementById('submit-btn');
-            if (submitBtn && !submitBtn.classList.contains('hidden')) submitBtn.click();
-          }
-        }
+      });
+
+      // Rensa kb-focus när man klickar med mus
+      document.getElementById('form-questions')?.addEventListener('mousedown', () => {
+        _kbFocusIdx = -1;
+        _getFormFields().forEach(f => f.classList.remove('kb-focused'));
       });
     }
 
@@ -3791,6 +3916,44 @@
       });
     });
     let _lastAssessmentCount = null;
+
+    // ── Hjälpfunktioner för skalvisning ───────────────────────────────────────
+    function getScaleRange(formType, question) {
+      const scales = appData?.formScales;
+      if (!scales) return null;
+      return (scales[formType] && scales[formType][question]) || null;
+    }
+
+    function parseScaleDesc(description, value) {
+      // Format: "1: text | 2: text | 3: text ..."
+      if (!description) return '';
+      const parts = description.split(' | ');
+      let lower = null, upper = null;
+      let lowerVal = -Infinity, upperVal = Infinity;
+      for (const part of parts) {
+        const m = part.match(/^(\d+):\s*(.+)/);
+        if (!m) continue;
+        const v = parseInt(m[1]); const txt = m[2].trim();
+        if (v === value) return txt;
+        if (v < value && v > lowerVal) { lowerVal = v; lower = txt.split('.')[0].split(',')[0].trim(); }
+        if (v > value && v < upperVal) { upperVal = v; upper = txt.split('.')[0].split(',')[0].trim(); }
+      }
+      if (lower && upper) return `Mellan ${lower.toLowerCase()} och ${upper.toLowerCase()}`;
+      if (lower) return `Över ${lower.toLowerCase()}`;
+      if (upper) return upper;
+      return '';
+    }
+
+    function formatScaleAnswer(formType, question, answer, description) {
+      const num = parseInt(answer);
+      if (isNaN(num)) return answer;
+      const range = getScaleRange(formType, question);
+      const label = parseScaleDesc(description, num);
+      let s = `${num}`;
+      if (range) s += ` (${range})`;
+      if (label) s += ` — ${label}`;
+      return s;
+    }
 
     async function pollForUpdates() {
       try {
