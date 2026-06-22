@@ -1062,7 +1062,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.9.2';
+    const APP_VERSION = 'v3.9.3';
 
     let appData = null;
     let currentUser = null;
@@ -2489,6 +2489,18 @@
       '#d4a017','#1a8fa0','#e87db3','#7a5230','#4a9e62'
     ];
 
+    function makeTotalLine(barDatasets, n) {
+      const totals = Array.from({length: n}, (_, i) =>
+        barDatasets.reduce((s, d) => s + (Number(d.data[i]) || 0), 0)
+      );
+      return {
+        type: 'line', label: 'Totalt', data: totals,
+        borderColor: '#c4292a', backgroundColor: 'transparent',
+        borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: '#c4292a',
+        tension: 0.2, fill: false, order: -1,
+      };
+    }
+
     async function loadStatistics() {
       const dateFrom     = document.getElementById('stat-date-from')?.value || null;
       const dateTo       = document.getElementById('stat-date-to')?.value || null;
@@ -2562,9 +2574,10 @@
 
         if (lineChart) lineChart.destroy();
         const lineCtx = document.getElementById('chart-line').getContext('2d');
+        const lineBarDs = areaDatasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined }));
         lineChart = new Chart(lineCtx, {
           type: 'bar',
-          data: { labels: Object.values(rawByMonth).map(m => m.label), datasets: areaDatasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined })) },
+          data: { labels: Object.values(rawByMonth).map(m => m.label), datasets: [...lineBarDs, makeTotalLine(lineBarDs, lineBarDs[0]?.data.length || 0)] },
           options: {
             responsive: true, maintainAspectRatio: true,
             plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
@@ -3263,9 +3276,10 @@
           }));
           window._overviewChartData = { months, allMonthKeys, ftByMonth, allFtRaw, showSent, showReceived };
           if (window._overviewChart) window._overviewChart.destroy();
+          const ovBarDs = datasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined }));
           window._overviewChart = new Chart(ctx, {
             type: 'bar',
-            data: { labels: allMonthKeys.map(mk => ftByMonth[mk]?.label || mk), datasets: datasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined })) },
+            data: { labels: allMonthKeys.map(mk => ftByMonth[mk]?.label || mk), datasets: [...ovBarDs, makeTotalLine(ovBarDs, allMonthKeys.length)] },
             options: {
               responsive: true, maintainAspectRatio: false,
               plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
@@ -3694,7 +3708,7 @@
       }));
       window._overviewChart = new Chart(ctx, {
         type: 'bar',
-        data: { labels: filteredKeys.map(mk => d.ftByMonth?.[mk]?.label || mk), datasets: datasets.map(ds => ({ ...ds, fill: undefined, tension: undefined, pointRadius: undefined })) },
+        data: { labels: filteredKeys.map(mk => d.ftByMonth?.[mk]?.label || mk), datasets: [...datasets.map(ds => ({ ...ds, fill: undefined, tension: undefined, pointRadius: undefined })), makeTotalLine(datasets, filteredKeys.length)] },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
