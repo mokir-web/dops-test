@@ -15,7 +15,7 @@
     h4 { color: #6b5c52; margin: 20px 0 4px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
     .field { margin-top: 22px; }
     label.field-label { display: block; font-weight: bold; margin-bottom: 5px; color: #1e1612; font-size: 19px; }
-    .field-description { font-size: 16px; color: #6b5c52; margin-bottom: 8px; }
+    .field-description { font-size: 14px; color: #6b5c52; margin-bottom: 8px; line-height: 1.6; padding-left: 8px; border-left: 2px solid #d8cfc5; }
     input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], select, textarea {
       width: 100%; max-width: 560px; padding: 11px 10px; font-size: 18px;
       border: 1.5px solid #c4b8ac; border-radius: 5px;
@@ -124,7 +124,8 @@
     .assessment-card .meta { font-size: 14px; color: #6b5c52; margin-bottom: 10px; }
     .assessment-answers { font-size: 16px; margin-top: 10px; }
     .ans-section { font-weight: bold; margin-top: 12px; color: #2a1f18; font-size: 16px; }
-    .ans-row { margin: 3px 0 3px 14px; color: #1e1612; font-size: 16px; }
+    .ans-row { margin: 5px 0 1px 14px; color: #1e1612; font-size: 16px; }
+    .ans-desc { margin: 0 0 4px 28px; color: #6b5c52; font-size: 13px; line-height: 1.5; }
 
     @keyframes spin { to { transform: rotate(360deg); } } margin-top: 16px; padding: 16px; background: #d8cfc5; border-radius: 7px; }
     .filter-chip {
@@ -240,7 +241,7 @@
       h3 { font-size: 18px; }
       h4 { font-size: 14px; }
       label.field-label { font-size: 16px; }
-      .field-description { font-size: 15px; }
+      .field-description { font-size: 13px; }
       .question-label { font-size: 17px; }
       .section-header { font-size: 17px; }
       input[type=text], input[type=email], input[type=password],
@@ -1569,7 +1570,15 @@
         if (q.description) {
           const desc = document.createElement('div');
           desc.className = 'field-description';
-          desc.textContent = q.description;
+          // Skaltexter har format "1: text | 3: text | 5: text" – rendera med radbrytning
+          if (q.description.includes(' | ')) {
+            q.description.split(' | ').forEach((part, i) => {
+              if (i > 0) desc.appendChild(document.createElement('br'));
+              desc.appendChild(document.createTextNode(part.trim()));
+            });
+          } else {
+            desc.textContent = q.description;
+          }
           div.appendChild(desc);
         }
         const fieldId = `q_${sectionName}_${idx}`.replace(/[^a-zA-Z0-9_]/g, '_');
@@ -1964,8 +1973,19 @@
           r.className = 'ans-row';
           const desc = appData?.formDescriptions?.[a.formType]?.[ans.question] || '';
           const displayAnswer = formatScaleAnswer(a.formType, ans.question, ans.answer, desc);
-          r.textContent = `${ans.question || ''}: ${displayAnswer}`;
-          answersDiv.appendChild(r);
+          // Separera "Fråga: värde (skala)" från eventuell lång beskrivningstext
+          const dashIdx = displayAnswer.indexOf(' — ');
+          if (dashIdx !== -1) {
+            r.textContent = `${ans.question || ''}: ${displayAnswer.slice(0, dashIdx)}`;
+            const dl = document.createElement('div');
+            dl.className = 'ans-desc';
+            dl.textContent = displayAnswer.slice(dashIdx + 3);
+            answersDiv.appendChild(r);
+            answersDiv.appendChild(dl);
+          } else {
+            r.textContent = `${ans.question || ''}: ${displayAnswer}`;
+            answersDiv.appendChild(r);
+          }
         });
         toggleBtn.onclick = () => {
           const hidden = answersDiv.classList.toggle('hidden');
@@ -2108,7 +2128,18 @@
           r.className = 'ans-row';
           const desc = appData?.formDescriptions?.[a.formType]?.[ans.question] || '';
           const displayAnswer = formatScaleAnswer(a.formType, ans.question, ans.answer, desc);
-          r.textContent = `${ans.question}: ${displayAnswer}`;
+          const dashIdx = displayAnswer.indexOf(' — ');
+          if (dashIdx !== -1) {
+            r.textContent = `${ans.question}: ${displayAnswer.slice(0, dashIdx)}`;
+            const dl = document.createElement('div');
+            dl.className = 'ans-desc';
+            dl.textContent = displayAnswer.slice(dashIdx + 3);
+            answersDiv.appendChild(r);
+            answersDiv.appendChild(dl);
+          } else {
+            r.textContent = `${ans.question}: ${displayAnswer}`;
+            answersDiv.appendChild(r);
+          }
           answersDiv.appendChild(r);
         });
         toggleBtn.onclick = () => {
@@ -2454,8 +2485,8 @@
     }
 
     const CHART_COLORS = [
-      '#3d5c4a','#6b8f7a','#9e7c68','#c4a882','#d8cfc5',
-      '#2a4234','#5a7a6a','#8a6858','#b49872','#e8e0d8'
+      '#3d5c4a','#e05c2a','#2670b5','#c4292a','#8b3a9e',
+      '#d4a017','#1a8fa0','#e87db3','#7a5230','#4a9e62'
     ];
 
     async function loadStatistics() {
