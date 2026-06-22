@@ -595,7 +595,6 @@
     <!-- ── STATISTICS ───────────────────────────────────────────── -->
     <div id="panel-statistics" class="hidden">
       <h2>Klinikens statistik</h2>
-      <div id="stat-trend-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;align-items:center;"></div>
       <div id="stat-klinik-row" class="hidden" style="margin-bottom:14px;">
         <label class="field-label">Klinik</label>
         <select id="stat-klinik-select" style="max-width:300px;" onchange="loadStatistics()">
@@ -1062,7 +1061,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.9.3';
+    const APP_VERSION = 'v3.9.4';
 
     let appData = null;
     let currentUser = null;
@@ -1676,6 +1675,7 @@
       }
       container.appendChild(btnRow);
       window.scrollTo({ top: container.offsetTop - 20, behavior: 'smooth' });
+      setTimeout(() => _setFieldFocus(0), 50);
     }
 
     function saveCurrentSectionAnswers(sectionName) {
@@ -1814,15 +1814,6 @@
             const totStr = h > 0 ? h + ' tim ' + m + ' min' : m + ' min';
             document.getElementById('confirm-time-total').textContent =
               'Totalt sparat med MoraDOPS: ' + totStr;
-            // Kontextmening baserad på JUST DETTA formulärs tid (rolig/absurd)
-            api('getContextPhrase', { minutes: savedMins, mode: 'registration' }).then(r => {
-              const ctxEl = document.getElementById('confirm-time-context');
-              if (ctxEl) {
-                ctxEl.textContent = r?.text || '';
-                const sig = document.getElementById('confirm-ai-sig');
-                if (sig) sig.style.display = r?.source === 'ai' ? 'inline-flex' : 'none';
-              }
-            }).catch(() => {});
           }).catch(() => {});
         } else if (confirmTimeEl) {
           confirmTimeEl.classList.add('hidden');
@@ -2580,7 +2571,7 @@
           data: { labels: Object.values(rawByMonth).map(m => m.label), datasets: [...lineBarDs, makeTotalLine(lineBarDs, lineBarDs[0]?.data.length || 0)] },
           options: {
             responsive: true, maintainAspectRatio: true,
-            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
+            plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 }, onClick: (e, li) => makeLegendClick(lineChart)(e, li) } },
             scales: {
               y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } },
               x: { stacked: true, grid: { color: '#d8cfc5' } }
@@ -3154,6 +3145,58 @@
       );
     }
 
+    // periodMonths=0 → visa all-time count; >0 → visa period-count med skalat mål
+    function renderFormGroup(title, forms, subGoals, periodCounts, allTimeCounts, role, periodMonths) {
+      if (!Object.keys(forms).length) return '';
+      const nM = periodMonths || 0;
+      const periodLabel = nM === 0 ? 'senaste 6 mån' : (nM <= 1 ? 'senaste månaden' : 'senaste ' + nM + ' mån');
+      const scaledGoal = (goal) => nM === 0 ? goal : Math.round(goal * nM / 6);
+      let s = `<div class="section-header" style="margin-top:24px;">${title}</div>`;
+      s += '<div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:14px;margin-top:14px;max-width:600px;">';
+      const dopsForms  = Object.entries(forms).filter(([ft]) => ft.startsWith('DOPS:') || ft.startsWith('DOPS '));
+      const otherForms = Object.entries(forms).filter(([ft]) => !ft.startsWith('DOPS:') && !ft.startsWith('DOPS ') && ft !== 'Operationsspecifik DOPS');
+      if (dopsForms.length) {
+        s += '<div style="font-size:15px;font-weight:bold;color:#2a1f18;margin-bottom:4px;">DOPS</div>';
+        dopsForms.sort((a,b) => a[0].localeCompare(b[0])).forEach(([ft, v]) => {
+          const subName  = ft.replace('DOPS: ','').replace('DOPS:','');
+          const countP   = periodCounts?.[ft] || 0;
+          const countAll = allTimeCounts?.[ft] || v.count;
+          const g        = scaledGoal(v.goal);
+          const color    = g ? (countP >= g ? '#4a9e62' : countP > 0 ? '#c8a96e' : '#9e2a18') : '#6b5c52';
+          s += `<div style="display:flex;align-items:center;gap:10px;padding:3px 0 3px 14px;cursor:pointer;" onclick="navigateToAssessments('${esc(ft)}','${role||'received'}')">`;
+          s += `<div style="font-size:14px;color:#6b5c52;flex:1;">${esc(subName)}</div>`;
+          s += `<div style="flex:2;max-width:160px;">${goalBar(countP, countAll, g, periodLabel)}</div>`;
+          s += `<div style="font-size:16px;font-weight:bold;color:${color};min-width:28px;text-align:right;">${countP}</div>`;
+          s += '</div>';
+        });
+        if (otherForms.length) s += '<div style="height:1px;background:#d8cfc5;margin:10px 0;"></div>';
+      }
+      otherForms.sort((a,b) => a[0].localeCompare(b[0])).forEach(([ft, v]) => {
+        const countP   = periodCounts?.[ft] || 0;
+        const countAll = allTimeCounts?.[ft] || v.count;
+        const g        = scaledGoal(v.goal);
+        const color    = g ? (countP >= g ? '#4a9e62' : countP > 0 ? '#c8a96e' : '#9e2a18') : '#6b5c52';
+        s += `<div style="display:flex;align-items:center;gap:10px;padding:4px 0;cursor:pointer;" onclick="navigateToAssessments('${esc(ft)}','${role||'received'}')">`;
+        s += `<div style="font-size:14px;font-weight:bold;color:#2a1f18;flex:1;">${esc(ft)}</div>`;
+        s += `<div style="flex:2;max-width:160px;">${goalBar(countP, countAll, g, periodLabel)}</div>`;
+        s += `<div style="font-size:16px;font-weight:bold;color:${color};min-width:28px;text-align:right;">${countP}</div>`;
+        s += '</div>';
+      });
+      s += '</div>';
+      return s;
+    }
+
+    function goalBar(countPeriod, countAll, goal, periodLabel) {
+      if (!goal) return '';
+      const lbl = periodLabel || 'senaste 6 mån';
+      const pct   = Math.min(100, Math.round(countPeriod / goal * 100));
+      const color = countPeriod >= goal ? '#4a9e62' : countPeriod > 0 ? '#c8a96e' : '#9e2a18';
+      return `<div style="margin-top:4px;background:#d8cfc5;border-radius:4px;height:8px;max-width:200px;">
+          <div style="background:${color};border-radius:4px;height:8px;width:${pct}%;transition:width 0.4s;"></div>
+        </div>
+        <div style="font-size:11px;color:#9e8e82;margin-top:2px;">${countPeriod} / ${goal} ${lbl} <span style="color:${color};">${countPeriod >= goal ? '✓' : ''}</span></div>`;
+    }
+
     function renderOverview(data) {
       const el = document.getElementById('overview-content');
       const userRole = currentUser.userRole;
@@ -3167,19 +3210,6 @@
           <div style="font-size:12px;opacity:0.8;letter-spacing:1px;">TOTALT SPARAT MED MORADOPS</div>
           <div style="font-size:28px;font-weight:bold;margin-top:4px;">${totStr}</div>
         </div>`;
-        html += `<div id="overview-context-msg" style="font-size:14px;color:#6b5c52;font-style:italic;margin-bottom:16px;"></div>`;
-        // Hämta AI-kontextmening asynkront (rimliga aktiviteter)
-        setTimeout(() => {
-          api('getContextPhrase', { minutes: data.totalMinutesSaved, mode: 'overview' }).then(r => {
-            const el2 = document.getElementById('overview-context-msg');
-            if (el2 && r?.text) {
-              el2.innerHTML = esc(r.text)
-                + (r.source === 'ai'
-                  ? ' <span style="font-size:11px;color:#9e8e82;font-style:normal;white-space:nowrap;background:#ede8e2;padding:2px 6px;border-radius:4px;margin-left:4px;"><span style="color:#c8a070;">✦</span> AI</span>'
-                  : '');
-            }
-          }).catch(() => {});
-        }, 0);
       }
 
       const showSent     = userRole === 'Registrerare' || userRole === 'Blandbild';
@@ -3189,53 +3219,9 @@
       const rec6m  = data.received_6m || {};
       const sent6m = data.sent_6m     || {};
 
-      function goalBar(count6m, countAll, goal) {
-        if (!goal) return '';
-        const pct   = Math.min(100, Math.round(count6m / goal * 100));
-        const color = count6m >= goal ? '#4a9e62' : count6m > 0 ? '#c8a96e' : '#9e2a18';
-        return `<div style="margin-top:4px;background:#d8cfc5;border-radius:4px;height:8px;max-width:200px;">
-          <div style="background:${color};border-radius:4px;height:8px;width:${pct}%;transition:width 0.4s;"></div>
-        </div>
-        <div style="font-size:11px;color:#9e8e82;margin-top:2px;">${count6m} / ${goal} senaste 6 mån <span style="color:${color};">${count6m >= goal ? '✓' : ''}</span></div>`;
-      }
+      // goalBar definierad på modul-nivå nedan
 
-      function renderFormGroup(title, forms, subGoals, is6mForms, role) {
-        if (!Object.keys(forms).length) return '';
-        let s = `<div class="section-header" style="margin-top:24px;">${title}</div>`;
-        s += '<div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:14px;margin-top:14px;max-width:600px;">';
-        const dopsForms  = Object.entries(forms).filter(([ft]) => ft.startsWith('DOPS:') || ft.startsWith('DOPS '));
-        const otherForms = Object.entries(forms).filter(([ft]) => !ft.startsWith('DOPS:') && !ft.startsWith('DOPS ') && ft !== 'Operationsspecifik DOPS');
-
-        if (dopsForms.length) {
-          const dopsTotal6m = dopsForms.reduce((sum,[ft]) => sum + (is6mForms?.[ft] || 0), 0);
-          const dopsGoal    = dopsForms.reduce((sum,[,v]) => sum + (v.goal||0), 0);
-          s += '<div style="font-size:15px;font-weight:bold;color:#2a1f18;margin-bottom:4px;">DOPS</div>';
-          dopsForms.sort((a,b) => a[0].localeCompare(b[0])).forEach(([ft, v]) => {
-            const subName = ft.replace('DOPS: ','').replace('DOPS:','');
-            const count6m = is6mForms?.[ft] || 0;
-            const color   = v.goal ? (count6m >= v.goal ? '#4a9e62' : count6m > 0 ? '#c8a96e' : '#9e2a18') : '#6b5c52';
-            // Klickbar rad → Mina bedömningar med filter
-            s += `<div style="display:flex;align-items:center;gap:10px;padding:3px 0 3px 14px;cursor:pointer;" onclick="navigateToAssessments('${esc(ft)}','${role||'received'}')">`;
-            s += `<div style="font-size:14px;color:#6b5c52;flex:1;">${esc(subName)}</div>`;
-            s += `<div style="flex:2;max-width:160px;">${goalBar(count6m, v.count, v.goal)}</div>`;
-            s += `<div style="font-size:16px;font-weight:bold;color:${color};min-width:28px;text-align:right;">${v.count}</div>`;
-            s += '</div>';
-          });
-          if (otherForms.length) s += '<div style="height:1px;background:#d8cfc5;margin:10px 0;"></div>';
-        }
-        otherForms.sort((a,b) => a[0].localeCompare(b[0])).forEach(([ft, v], idx) => {
-          const count6m = is6mForms?.[ft] || 0;
-          const color = v.goal ? (count6m >= v.goal ? '#4a9e62' : count6m > 0 ? '#c8a96e' : '#9e2a18') : '#3d5c4a';
-          if (idx > 0) s += '<div style="height:1px;background:#d8cfc5;margin:10px 0;"></div>';
-          s += `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;" onclick="navigateToAssessments('${esc(ft)}','${role||'received'}')">`;
-          s += `<div style="font-size:15px;font-weight:bold;min-width:140px;color:#2a1f18;">${esc(ft)}</div>`;
-          s += '<div style="flex:1;">' + goalBar(count6m, v.count, v.goal) + '</div>';
-          s += `<div style="font-size:18px;font-weight:bold;color:${color};min-width:32px;text-align:right;">${v.count}</div>`;
-          s += '</div>';
-        });
-        s += '</div>';
-        return s;
-      }
+      // renderFormGroup definierad på modul-nivå
 
       // Trendgraf
       const months = Object.values(data.byMonth || {});
@@ -3251,10 +3237,16 @@
         html += '<div style="position:relative;width:100%;height:220px;"><canvas id="overview-chart"></canvas></div></div>';
       }
 
-      if (showReceived) html += renderFormGroup('Mottagna bedömningar',     data.received, data.subGoals, rec6m, 'received');
-      if (showSent)     html += renderFormGroup('Registrerade bedömningar', data.sent,     data.subGoals, sent6m, 'sent');
+      // Initial render med 6-månaders period (periodMonths=0 → label "senaste 6 mån")
+      if (showReceived) html += renderFormGroup('Mottagna bedömningar',     data.received, data.subGoals, rec6m,  rec6m,  'received', 0);
+      if (showSent)     html += renderFormGroup('Registrerade bedömningar', data.sent,     data.subGoals, sent6m, sent6m, 'sent',     0);
 
       el.innerHTML = html;
+      // Spara data globalt för filterTrend
+      // Bygg all-time count maps för renderFormGroup
+      const recAllTime = {};  Object.entries(data.received).forEach(([ft,v]) => { recAllTime[ft] = v.count; });
+      const sentAllTime = {}; Object.entries(data.sent).forEach(([ft,v])     => { sentAllTime[ft] = v.count; });
+      window._overviewData = { data, showSent, showReceived, recAllTime, sentAllTime, rec6m, sent6m };
 
       // Rita staplad area-graf per formulärtyp (som i Klinikens statistik)
       if (months.length > 0) {
@@ -3274,7 +3266,7 @@
             backgroundColor: CHART_COLORS[i % CHART_COLORS.length] + '55',
             tension: 0.3, fill: true, pointRadius: 2,
           }));
-          window._overviewChartData = { months, allMonthKeys, ftByMonth, allFtRaw, showSent, showReceived };
+          window._overviewChartData = { months, allMonthKeys, ftByMonth, allFtRaw, showSent, showReceived, byMonthSentFt: data.byMonthSentFt || {}, byMonthRecFt: data.byMonthRecFt || {} };
           if (window._overviewChart) window._overviewChart.destroy();
           const ovBarDs = datasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined }));
           window._overviewChart = new Chart(ctx, {
@@ -3282,7 +3274,7 @@
             data: { labels: allMonthKeys.map(mk => ftByMonth[mk]?.label || mk), datasets: [...ovBarDs, makeTotalLine(ovBarDs, allMonthKeys.length)] },
             options: {
               responsive: true, maintainAspectRatio: false,
-              plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
+              plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 }, onClick: (e, li) => makeLegendClick(window._overviewChart)(e, li) } },
               scales: { y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } }, x: { stacked: true, grid: { color: '#d8cfc5' } } }
             }
           });
@@ -3711,10 +3703,46 @@
         data: { labels: filteredKeys.map(mk => d.ftByMonth?.[mk]?.label || mk), datasets: [...datasets.map(ds => ({ ...ds, fill: undefined, tension: undefined, pointRadius: undefined })), makeTotalLine(datasets, filteredKeys.length)] },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } },
+          plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 }, onClick: (e, li) => makeLegendClick(window._overviewChart)(e, li) } },
           scales: { y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } }, x: { stacked: true, grid: { color: '#d8cfc5' } } }
         }
       });
+      // Uppdatera formulärgrupper per valt tidsintervall
+      _reRenderFormGroups(days === 0 ? 0 : Math.max(1, Math.ceil(days / 30)), filteredKeys);
+    }
+
+    function _reRenderFormGroups(nMonths, filteredKeys) {
+      const od = window._overviewData;
+      if (!od) return;
+      const { data, showSent, showReceived, recAllTime, sentAllTime } = od;
+      const d = window._overviewChartData;
+      if (!d) return;
+      // Summera per-period counts från byMonthSentFt / byMonthRecFt
+      const recP = {}, sentP = {};
+      (filteredKeys || []).forEach(mk => {
+        const sf = d.byMonthSentFt?.[mk] || {};
+        Object.entries(sf).forEach(([ft, n]) => { if (ft !== 'label') sentP[ft] = (sentP[ft] || 0) + n; });
+        const rf = d.byMonthRecFt?.[mk] || {};
+        Object.entries(rf).forEach(([ft, n]) => { if (ft !== 'label') recP[ft]  = (recP[ft]  || 0) + n; });
+      });
+      // Hitta container och ersätt formulärgrupperna
+      const el = document.getElementById('overview-content');
+      if (!el) return;
+      // Ta bort gamla section-headers och deras kort
+      el.querySelectorAll('.section-header').forEach(sh => {
+        const txt = sh.textContent.trim();
+        if (txt === 'Mottagna bedömningar' || txt === 'Registrerade bedömningar') {
+          // Ta bort header + nästa syskon (kortet)
+          const next = sh.nextElementSibling;
+          if (next) next.remove();
+          sh.remove();
+        }
+      });
+      // Lägg till uppdaterade grupper
+      const frag = document.createElement('div');
+      if (showReceived) frag.innerHTML += renderFormGroup('Mottagna bedömningar',     data.received, data.subGoals, nMonths === 0 ? (od.rec6m || recP)  : recP,  recAllTime, 'received', nMonths);
+      if (showSent)     frag.innerHTML += renderFormGroup('Registrerade bedömningar', data.sent,     data.subGoals, nMonths === 0 ? (od.sent6m || sentP) : sentP, sentAllTime, 'sent',     nMonths);
+      el.appendChild(frag);
     }
 
     // ── Startsida-navigation ──────────────────────────────────────────────
@@ -4023,15 +4051,6 @@
       } catch(e) { /* tyst */ }
     }
 
-    function filterStatTrend(days, btn) {
-      document.querySelectorAll('#stat-trend-filter-btns button').forEach(b => {
-        b.style.background = b === btn ? '#3d5c4a' : '#d8cfc5';
-        b.style.color = b === btn ? '#f0ede8' : '#2a1f18';
-      });
-      window._statTrendDays = days;
-      loadStatistics();
-    }
-
     function clearCache() {
       localStorage.clear();
       location.reload();
@@ -4099,23 +4118,6 @@
       if (panel === 'assessment')       { resetAssessment(); }
       if (panel === 'my-assessments')   { applyFilters(); }
       if (panel === 'statistics') {
-        // Bygg tidsfilterknappar för statistik om de saknas
-        const statFiltEl = document.getElementById('stat-trend-filter-btns');
-        if (statFiltEl && statFiltEl.children.length === 0) {
-          const lbl = document.createElement('span');
-          lbl.style.cssText = 'font-size:13px;color:#6b5c52;align-self:center;margin-right:4px;';
-          lbl.textContent = 'Visa:';
-          statFiltEl.appendChild(lbl);
-          [['1 vecka',7],['1 månad',30],['3 månader',90],['6 månader',180],['1 år',365],['MAX',0]].forEach(([label, days], i) => {
-            const btn = document.createElement('button');
-            btn.textContent = label;
-            btn.style.cssText = 'border:none;border-radius:4px;padding:4px 10px;font-size:13px;cursor:pointer;';
-            btn.style.background = i === 3 ? '#3d5c4a' : '#d8cfc5';
-            btn.style.color = i === 3 ? '#f0ede8' : '#2a1f18';
-            btn.onclick = () => filterStatTrend(days, btn);
-            statFiltEl.appendChild(btn);
-          });
-        }
         // Visa klinikväljare för global admin
         const statKlinikRow = document.getElementById('stat-klinik-row');
         if (statKlinikRow && activePrivilege === 'Administratör' && activeKlinikId === '*') {
