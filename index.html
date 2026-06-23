@@ -556,6 +556,7 @@
 
     <div id="panel-my-assessments" class="hidden">
       <h2>Mina bedömningar</h2>
+      <div id="assessment-swr-status" style="min-height:18px;margin-bottom:6px;"></div>
       <!-- Åtgärdsrad: tabbar + filtrerknapp alltid synlig -->
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
         <button class="btn-primary"   id="tab-received" onclick="setAssessmentTab('received')">Mottagna</button>
@@ -585,13 +586,13 @@
         <button class="btn-secondary btn-small" id="filter-toggle-btn" onclick="toggleAssessmentFilter()">⚙ Filtrera</button>
         <span id="selected-count" style="font-size:13px;color:#6b5c52;margin-left:auto;"></span>
       </div>
-      <div id="assessment-swr-status" style="margin-bottom:6px;min-height:18px;"></div>
       <div id="my-assessments-list"></div>
       <div id="export-status" style="margin-top:12px;"></div>
     </div>
     <!-- ── STATISTICS ───────────────────────────────────────────── -->
     <div id="panel-statistics" class="hidden">
       <h2>Klinikens statistik</h2>
+      <div id="statistics-swr-status" style="min-height:18px;margin-bottom:4px;"></div>
       <div id="stat-klinik-row" class="hidden" style="margin-bottom:14px;">
         <label class="field-label">Klinik</label>
         <select id="stat-klinik-select" style="max-width:300px;" onchange="loadStatistics()">
@@ -626,7 +627,6 @@
           <canvas id="chart-pie" height="220"></canvas>
         </div>
       </div>
-      <div id="statistics-swr-status" style="min-height:18px;margin-bottom:4px;"></div>
       <div id="statistics-content"></div>
     </div>
     <div id="panel-documents" class="hidden">
@@ -881,6 +881,7 @@
     <!-- ── INBOX ────────────────────────────────────────────────── -->
     <div id="panel-inbox" class="hidden">
       <h2>Förfrågningar</h2>
+      <div id="inbox-swr-status" style="min-height:18px;margin-bottom:6px;"></div>
       <div style="display:flex;gap:10px;margin-bottom:16px;">
         <button class="btn-primary"   id="inbox-tab-inbox"  onclick="setInboxTab('inbox')">Mottagna</button>
         <button class="btn-secondary" id="inbox-tab-outbox" onclick="setInboxTab('outbox')">Skickade</button>
@@ -953,7 +954,6 @@
         <div id="bulk-status"></div>
       </div>
 
-      <div id="inbox-swr-status" style="min-height:18px;margin-bottom:4px;"></div>
       <div id="inbox-list"></div>
     </div>
 
@@ -1089,19 +1089,21 @@
     function bgAge(key) { const e = _bgCache[_bk(key)]; return e ? Date.now()-e.ts : Infinity; }
     function bgSet(key, data) { _bgCache[_bk(key)] = { data, ts: Date.now() }; }
     function bgInvalidate(key) { delete _bgCache[_bk(key)]; }
-    // Invalidera alla nycklar för aktuell användare som börjar med prefix (t.ex. 'statistics_')
-    function bgInvalidatePrefix(prefix) {
-      const p = (currentUser?.email || '__anon__') + ':' + prefix;
-      Object.keys(_bgCache).forEach(k => { if (k.startsWith(p)) delete _bgCache[k]; });
-    }
     const SWR_FRESH_MS = 60 * 1000; // hoppa revalidering om cachen är yngre än detta
+    // Markera inaktuell: behåll innehållet (visas direkt) men tvinga revalidering vid nästa vy
+    function bgMarkStale(key) { const e = _bgCache[_bk(key)]; if (e) e.ts = Date.now() - SWR_FRESH_MS - 1000; }
+    function bgMarkStalePrefix(prefix) {
+      const p = (currentUser?.email || '__anon__') + ':' + prefix;
+      const t = Date.now() - SWR_FRESH_MS - 1000;
+      Object.keys(_bgCache).forEach(k => { if (k.startsWith(p) && _bgCache[k]) _bgCache[k].ts = t; });
+    }
 
     // ── Stale-while-revalidate ────────────────────────────────────────────
     async function swr(cacheKey, fetchFn, renderFn, statusEl, diffFn) {
       const cached = bgGet(cacheKey);
       if (cached) {
         renderFn(cached);
-        // Färsk nog (t.ex. nyss laddad via getBootstrap) → hoppa revalidering, spara en request
+        // Färsk nog (nyss förladdad) → hoppa revalidering, spara en request
         if (bgAge(cacheKey) < SWR_FRESH_MS) {
           if (statusEl) statusEl.innerHTML = '';
           return;
@@ -1109,7 +1111,7 @@
         if (statusEl) statusEl.innerHTML =
           '<span style="font-size:12px;color:#b0a090;display:flex;align-items:center;gap:5px;">' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>' +
-          'Söker…</span>';
+          'Söker efter uppdateringar…</span>';
         try {
           const fresh = await fetchFn();
           const changed = JSON.stringify(fresh) !== JSON.stringify(cached);
@@ -1762,11 +1764,11 @@
         const recipientName  = recipient.split(' -- ')[0];
         const registrarName  = `${currentUser.firstName} ${currentUser.lastName}`;
         const result = await api('saveAnswers', { answerList, recipientEmail, recipientName, registrarName, formType, startTime: window._formStartTime || null });
-        // Invalidera berörda cachar så ny bedömning syns direkt (annars kan 60s-skippen visa gammalt)
-        bgInvalidate('myOverview');
-        bgInvalidate('myAssessments_sent');
-        bgInvalidate('myAssessments_received');
-        bgInvalidatePrefix('statistics_');
+        // Markera berörda cachar inaktuella: innehåll visas direkt, revalidering hämtar nya bedömningen
+        bgMarkStale('myOverview');
+        bgMarkStale('myAssessments_sent');
+        bgMarkStale('myAssessments_received');
+        bgMarkStalePrefix('statistics_');
         // Återställ och gå tillbaka till startvyn
         savedAnswers = {};
         currentFormData = null;
@@ -3850,19 +3852,7 @@
       if (!currentUser) return;
       const email    = currentUser.email;
       const klinikId = activeKlinikId || currentUser.klinikId || '*';
-      // Försök kombinerad bootstrap (läser Svar en gång i backend)
-      try {
-        const b = await api('getBootstrap', { email, klinikId });
-        if (b && b.overview !== undefined) {
-          bgSet('myOverview',             b.overview);
-          bgSet('myAssessments_received', b.received);
-          bgSet('myAssessments_sent',     b.sent);
-          bgSet('statistics_' + klinikId, b.statistics);
-          bgSet('inbox_' + email,         b.inbox);
-          return;
-        }
-      } catch(e) { /* faller igenom till gamla parallellanrop */ }
-      // Fallback: separata anrop (bakåtkompatibelt om backend saknar getBootstrap)
+      // Parallella anrop: varje cache-nyckel fylls så snabbt som möjligt (latensen döljs)
       try {
         const [ov, myRec, mySent, stat, inb] = await Promise.allSettled([
           api('getMyOverview',    { email, klinikId: currentUser.klinikId }),
