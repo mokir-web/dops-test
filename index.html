@@ -274,6 +274,7 @@
       .ans-section { font-size: 15px; }
       .ans-row { font-size: 15px; }
       .filter-chip { font-size: 15px; padding: 8px 14px; }
+      #chart-line, #chart-pie { min-height: 280px; }
     }
   </style>
 
@@ -601,7 +602,10 @@
           <option value="*">Alla kliniker</option>
         </select>
       </div>
-      <div class="filter-box" style="margin-bottom:20px;">
+      <div style="margin-bottom:10px;">
+        <button class="btn-secondary btn-small" id="stat-filter-toggle-btn" onclick="toggleStatFilter()">⚙ Filtrera</button>
+      </div>
+      <div id="stat-filter-panel" class="hidden filter-box" style="margin-bottom:20px;">
         <div class="date-grid">
           <div><label class="field-label">Från datum</label><input type="date" id="stat-date-from"></div>
           <div><label class="field-label">Till datum</label><input type="date" id="stat-date-to"></div>
@@ -616,12 +620,12 @@
         </div>
       </div>
       <!-- Grafer -->
-      <div style="display:flex;flex-direction:column;gap:24px;margin-bottom:24px;" id="stat-charts">
-        <div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;">
+      <div style="display:flex;flex-direction:column;gap:24px;margin-bottom:24px;width:100%;" id="stat-charts">
+        <div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;min-width:0;">
           <div style="font-weight:bold;font-size:16px;color:#2a1f18;margin-bottom:12px;">Bedömningar över tid</div>
           <canvas id="chart-line" height="220"></canvas>
         </div>
-        <div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;">
+        <div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;min-width:0;">
           <div style="font-weight:bold;font-size:16px;color:#2a1f18;margin-bottom:12px;">Fördelning per formulärtyp</div>
           <canvas id="chart-pie" height="220"></canvas>
         </div>
@@ -646,6 +650,7 @@
         <p><strong>DOPS</strong> (Direct Observation of Procedural Skills) – strukturerad bedömning av tekniska färdigheter vid kirurgiska ingrepp eller procedurer, baserad på direktobservation. ST-läkaren tar initiativ till bedömningen. Varje DOPS ska representera olika ingrepp. Bedömningen genomförs under ca 20 minuter, följt av ca 5 minuters återkoppling. Specifika mallar finns för: Laparoskopisk appendektomi, Öppen appendektomi, Kolecystektomi, Laparotomi/tarmresektion/stomi (Tarmresektion), Partiell mastektomi + sentinel node, Öppet ljumskbråck, Endoskopiskt ljumskbråck, Främre nätplastik, LGBP, Gastroskopi, samt Allmän DOPS för övriga ingrepp.</p>
         <p><strong>Mini-CEX</strong> (Mini Clinical Evaluation Exercise) – kortare strukturerad observation av kliniskt arbete, t.ex. ett patientmöte eller rond. Bedömningen fokuserar på anamnestagning, klinisk undersökning, professionellt förhållningssätt och klinisk bedömningsförmåga. Skala 1–6: 1–2 otillfredsställande, 3–4 tillfredsställande, 5–6 utmärkt.</p>
         <p><strong>CBD</strong> (Case-Based Discussion) – strukturerad diskussion av ett kliniskt fall som ST-läkaren handlagt. ST-läkaren väljer ut två färska fall med journalanteckningar; bedömaren väljer ett. Diskussionen tar ca 20 minuter och fokuserar på journalanteckning, klinisk bedömning, val av undersökningar, behandling, uppföljning och professionalism. Skala 1–6.</p>
+        <p><strong>NOTSS</strong> (Non-Technical Skills for Surgeons) – strukturerad observation och bedömning av icke-tekniska färdigheter i operationssalen, baserad på NOTSS-systemet v2.0 (RCSEd). Bedömningen täcker fyra kategorier: Situationsmedvetenhet, Beslutsfattande, Kommunikation & teamarbete, och Ledarskap — vardera med tre element som betygsätts på skala 1–4 (Poor / Marginal / Acceptable / Good). Används som formativt bedömningsinstrument; ej avsett för summativ bedömning.</p>
         <p><strong>360 GRADER</strong> – strukturerad feedback från kollegor, sjuksköterskor och annan personal om professionellt bemötande och samarbete.</p>
         <p><strong>Återkoppling efter muntlig presentation</strong> – strukturerad bedömning efter journalgenomgång, fallpresentation eller liknande.</p>
         <p><strong>Videogranskning</strong> – bedömning från analys av inspelad operation.</p>
@@ -1835,6 +1840,13 @@
       btn.textContent = open ? '✕ Stäng filter' : '⚙ Filtrera';
     }
 
+    function toggleStatFilter() {
+      const panel = document.getElementById('stat-filter-panel');
+      const btn   = document.getElementById('stat-filter-toggle-btn');
+      const open  = panel.classList.toggle('hidden') === false;
+      btn.textContent = open ? '✕ Stäng filter' : '⚙ Filtrera';
+    }
+
     function setAssessmentTab(role) {
       currentAssessmentRole = role;
       document.getElementById('tab-sent').className     = role === 'sent'     ? 'btn-primary' : 'btn-secondary';
@@ -2460,7 +2472,7 @@
         if (!chart._selDs) chart._selDs = new Set();
         const sel = chart._selDs;
         if (sel.size === 0) {
-          sel.add(i);
+          sel.add(i)
           chart.data.datasets.forEach((_, j) => chart.setDatasetVisibility(j, j === i));
         } else if (sel.has(i)) {
           sel.delete(i);
@@ -2473,6 +2485,28 @@
         }
         chart.update();
       };
+    }
+
+    // Mobil: koppla touchstart på canvasen till legend-klick via Chart.js plugin API
+    function attachLegendTouch(chart) {
+      chart.canvas.addEventListener('touchstart', function(ev) {
+        ev.preventDefault();
+        const touch = ev.touches[0];
+        const rect  = chart.canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+        const legendItems = chart.legend.legendItems;
+        if (!legendItems) return;
+        const hitboxes = chart.legend.legendHitBoxes;
+        if (!hitboxes) return;
+        for (let i = 0; i < hitboxes.length; i++) {
+          const b = hitboxes[i];
+          if (x >= b.left && x <= b.left + b.width && y >= b.top && y <= b.top + b.height) {
+            makeLegendClick(chart)(null, legendItems[i]);
+            return;
+          }
+        }
+      }, { passive: false });
     }
 
     function aggregateFormTypes(byFormType) {
@@ -2579,11 +2613,12 @@
         if (lineChart) lineChart.destroy();
         const lineCtx = document.getElementById('chart-line').getContext('2d');
         const lineBarDs = areaDatasets.map(d => ({ ...d, fill: undefined, tension: undefined, pointRadius: undefined }));
+        const isMobile = window.innerWidth < 600;
         lineChart = new Chart(lineCtx, {
           type: 'bar',
           data: { labels: Object.values(rawByMonth).map(m => m.label), datasets: [...lineBarDs, makeTotalLine(lineBarDs, lineBarDs[0]?.data.length || 0)] },
           options: {
-            responsive: true, maintainAspectRatio: true,
+            responsive: true, maintainAspectRatio: !isMobile,
             plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 }, onClick: (e, li) => makeLegendClick(lineChart)(e, li) } },
             scales: {
               y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } },
@@ -2591,6 +2626,7 @@
             }
           }
         });
+        attachLegendTouch(lineChart);
 
         // ── Pajdiagram (aggregerade) ─────────────────────────────
         const pieLabels = Object.keys(aggByFormType).filter(ft =>
@@ -2602,7 +2638,7 @@
         pieChart = new Chart(pieCtx, {
           type: 'pie',
           data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: CHART_COLORS.slice(0, pieLabels.length), borderColor: '#f5f1ec', borderWidth: 2 }] },
-          options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
+          options: { responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
         });
 
         // ── Tabeller ──────────────────────────────────────────────
@@ -3251,8 +3287,10 @@
       }
 
       // Initial render med 6-månaders period (periodMonths=0 → label "senaste 6 mån")
+      const isSentRegistrar = userRole === 'Registrerare';
+      const sentForRender = (forms) => Object.fromEntries(Object.entries(forms).map(([ft, v]) => [ft, { ...v, goal: isSentRegistrar ? (v.sentGoal || 0) : 0 }]));
       if (showReceived) html += renderFormGroup('Mottagna bedömningar',     data.received, data.subGoals, rec6m,  rec6m,  'received', 0);
-      if (showSent)     html += renderFormGroup('Registrerade bedömningar', data.sent,     data.subGoals, sent6m, sent6m, 'sent',     0);
+      if (showSent)     html += renderFormGroup('Registrerade bedömningar', sentForRender(data.sent), data.subGoals, sent6m, sent6m, 'sent', 0);
 
       el.innerHTML = html;
       // Spara data globalt för filterTrend
@@ -3291,6 +3329,7 @@
               scales: { y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } }, x: { stacked: true, grid: { color: '#d8cfc5' } } }
             }
           });
+          attachLegendTouch(window._overviewChart);
         }
       }
     }
@@ -3720,6 +3759,7 @@
           scales: { y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1 }, grid: { color: '#d8cfc5' } }, x: { stacked: true, grid: { color: '#d8cfc5' } } }
         }
       });
+      attachLegendTouch(window._overviewChart);
       // Uppdatera formulärgrupper per valt tidsintervall
       _reRenderFormGroups(days === 0 ? 0 : Math.max(1, Math.ceil(days / 30)), filteredKeys);
     }
@@ -3753,8 +3793,10 @@
       });
       // Lägg till uppdaterade grupper
       const frag = document.createElement('div');
+      const isSentReg = currentUser?.userRole === 'Registrerare';
+      const sentFR = (forms) => Object.fromEntries(Object.entries(forms).map(([ft, v]) => [ft, { ...v, goal: isSentReg ? (v.sentGoal || 0) : 0 }]));
       if (showReceived) frag.innerHTML += renderFormGroup('Mottagna bedömningar',     data.received, data.subGoals, nMonths === 0 ? (od.rec6m || recP)  : recP,  recAllTime, 'received', nMonths);
-      if (showSent)     frag.innerHTML += renderFormGroup('Registrerade bedömningar', data.sent,     data.subGoals, nMonths === 0 ? (od.sent6m || sentP) : sentP, sentAllTime, 'sent',     nMonths);
+      if (showSent)     frag.innerHTML += renderFormGroup('Registrerade bedömningar', sentFR(data.sent), data.subGoals, nMonths === 0 ? (od.sent6m || sentP) : sentP, sentAllTime, 'sent',     nMonths);
       el.appendChild(frag);
     }
 
