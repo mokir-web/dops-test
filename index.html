@@ -2477,7 +2477,8 @@
       };
     }
 
-    // Returnera alla formulärtyper individuellt (ingen DOPS-aggregering)
+    function aggregateFormTypes(byFormType) {
+      // Returnera alla formulärtyper individuellt (ingen DOPS-aggregering)
       return Object.fromEntries(Object.entries(byFormType));
     }
     function aggregateByMonth(byFormTypeByMonth) {
