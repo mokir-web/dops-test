@@ -1061,7 +1061,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.9.4';
+    const APP_VERSION = 'v3.9.5';
 
     let appData = null;
     let currentUser = null;
@@ -1246,7 +1246,7 @@
         if (hasUnread) showPanel('inbox');
         else goToStartPage();
       });
-      setTimeout(backgroundLoad, 1500);
+      setTimeout(backgroundLoad, 100);
     }
 
     function renderPrivilegeToggle() {
