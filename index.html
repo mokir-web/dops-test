@@ -2468,7 +2468,7 @@
         if (!chart._selDs) chart._selDs = new Set();
         const sel = chart._selDs;
         if (sel.size === 0) {
-          sel.add(i)
+          sel.add(i);
           chart.data.datasets.forEach((_, j) => chart.setDatasetVisibility(j, j === i));
         } else if (sel.has(i)) {
           sel.delete(i);
@@ -2483,11 +2483,10 @@
       };
     }
 
-    // Mobil: koppla touchstart på canvasen till legend-klick via Chart.js plugin API
+    // Mobil: koppla touchend på canvasen till legend-klick via Chart.js plugin API
     function attachLegendTouch(chart) {
-      chart.canvas.addEventListener('touchstart', function(ev) {
-        ev.preventDefault();
-        const touch = ev.touches[0];
+      chart.canvas.addEventListener('touchend', function(ev) {
+        const touch = ev.changedTouches[0];
         const rect  = chart.canvas.getBoundingClientRect();
         const x = touch.clientX - rect.left;
         const y = touch.clientY - rect.top;
@@ -2502,7 +2501,7 @@
             return;
           }
         }
-      }, { passive: false });
+      }, { passive: true });
     }
 
     function aggregateFormTypes(byFormType) {
@@ -2634,7 +2633,7 @@
         pieChart = new Chart(pieCtx, {
           type: 'pie',
           data: { labels: pieLabels, datasets: [{ data: pieData, backgroundColor: CHART_COLORS.slice(0, pieLabels.length), borderColor: '#f5f1ec', borderWidth: 2 }] },
-          options: { responsive: true, maintainAspectRatio: !isMobile, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
+          options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12 } } } }
         });
 
         // ── Tabeller ──────────────────────────────────────────────
