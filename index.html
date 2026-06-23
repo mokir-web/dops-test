@@ -2453,9 +2453,7 @@
       loadStatistics();
     }
 
-    // ── Aggregera formulärtyper: alla "DOPS: *" → "DOPS" ─────────────────
-    function aggregateFormTypes(byFormType) {
-      // ── Legend isolate-click helper ──────────────────────────────────────
+    // ── Legend isolate-click helper ──────────────────────────────────────
     function makeLegendClick(chart) {
       return function(e, legendItem) {
         const i = legendItem.datasetIndex;
