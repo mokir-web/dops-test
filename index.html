@@ -274,7 +274,7 @@
       .ans-section { font-size: 15px; }
       .ans-row { font-size: 15px; }
       .filter-chip { font-size: 15px; padding: 8px 14px; }
-      #chart-line, #chart-pie { min-height: 280px; }
+      #chart-line, #chart-pie { height: 250px !important; max-height: 250px !important; }
     }
   </style>
 
@@ -370,17 +370,13 @@
         <label class="field-label">Ort *</label>
         <select id="reg-location" onchange="updateClinicDropdown()">
           <option value="">-- Välj ort --</option>
-          <option value="__new__">+ Ny ort</option>
         </select>
-        <input type="text" id="reg-location-new" class="hidden" placeholder="Ange ort" style="margin-top:6px;">
       </div>
       <div class="field">
         <label class="field-label">Klinik *</label>
-        <select id="reg-clinic" onchange="checkNewClinic()">
+        <select id="reg-clinic">
           <option value="">-- Välj klinik --</option>
-          <option value="__new__">+ Ny klinik</option>
         </select>
-        <input type="text" id="reg-clinic-new" class="hidden" placeholder="Ange kliniknamn" style="margin-top:6px;">
       </div>
       <div class="field">
         <label class="field-label">Användarroll *</label>
@@ -2817,10 +2813,9 @@
       if (!appData) return;
       const sel = document.getElementById('reg-location');
       if (!sel) return;
-      // Tömmer alltid och fyller på nytt
+      // Tömmer alltid och fyller på nytt (bara befintliga orter — ny ort/klinik ej tillåtet från registreringsskärmen)
       sel.innerHTML = '<option value="">-- Välj ort --</option>';
       appData.locations.forEach(loc => sel.appendChild(newOption(loc, loc)));
-      sel.appendChild(newOption('__new__', '+ Ny ort'));
       // Uppdatera profil-klinik-dropdown också
       const profileSel = document.getElementById('profile-clinic-input');
       if (profileSel && appData.klinikIdMap) {
@@ -2835,33 +2830,22 @@
 
     function updateClinicDropdown() {
       const locVal = document.getElementById('reg-location').value;
-      show('reg-location-new', locVal === '__new__');
       const clinicSel = document.getElementById('reg-clinic');
-      clinicSel.innerHTML = '<option value="">-- Välj klinik --</option><option value="__new__">+ Ny klinik</option>';
-      document.getElementById('reg-clinic-new').classList.add('hidden');
-      if (!locVal || locVal === '__new__') return;
+      clinicSel.innerHTML = '<option value="">-- Välj klinik --</option>';
+      if (!locVal) return;
       appData.clinics
         .filter(c => c.startsWith(locVal + ' - ') || c === locVal)
         .forEach(c => {
           const label = c.includes(' - ') ? c.split(' - ').slice(1).join(' - ') : c;
-          clinicSel.insertBefore(newOption(c, label), clinicSel.options[clinicSel.options.length - 1]);
+          clinicSel.appendChild(newOption(c, label));
         });
-    }
-
-    function checkNewClinic() {
-      show('reg-clinic-new', document.getElementById('reg-clinic').value === '__new__');
     }
 
     async function doRegister() {
       const locVal    = document.getElementById('reg-location').value;
-      const locNew    = document.getElementById('reg-location-new').value.trim();
       const clinicVal = document.getElementById('reg-clinic').value;
-      const clinicNew = document.getElementById('reg-clinic-new').value.trim();
       const pin       = document.getElementById('reg-pin').value.trim();
-      const location  = locVal === '__new__' ? locNew : locVal;
-      const fullClinic = clinicVal === '__new__'
-        ? (location ? `${location} - ${clinicNew}` : clinicNew)
-        : clinicVal;
+      const fullClinic = clinicVal;
       // Hitta klinikId från appData baserat på kliniknamn
       let klinikId = '';
       if (appData && appData.klinikIdMap) {
@@ -3283,7 +3267,7 @@
           html += `<button onclick="filterTrend(${days},this)" style="border:none;border-radius:4px;padding:4px 10px;font-size:13px;cursor:pointer;${active}">${label}</button>`;
         });
         html += '</div>';
-        html += '<div style="position:relative;width:100%;height:220px;"><canvas id="overview-chart"></canvas></div></div>';
+        html += '<div style="position:relative;width:100%;height:' + (window.innerWidth < 600 ? 400 : 220) + 'px;"><canvas id="overview-chart"></canvas></div></div>';
       }
 
       // Initial render med 6-månaders period (periodMonths=0 → label "senaste 6 mån")
