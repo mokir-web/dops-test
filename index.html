@@ -2455,22 +2455,36 @@
 
     // ── Aggregera formulärtyper: alla "DOPS: *" → "DOPS" ─────────────────
     function aggregateFormTypes(byFormType) {
-      const agg = {};
-      Object.entries(byFormType).forEach(([ft, count]) => {
-        const key = ft.startsWith('DOPS') ? 'DOPS' : ft;
-        agg[key] = (agg[key] || 0) + count;
-      });
-      return agg;
+      // ── Legend isolate-click helper ──────────────────────────────────────
+    function makeLegendClick(chart) {
+      return function(e, legendItem) {
+        const i = legendItem.datasetIndex;
+        if (!chart._selDs) chart._selDs = new Set();
+        const sel = chart._selDs;
+        if (sel.size === 0) {
+          sel.add(i);
+          chart.data.datasets.forEach((_, j) => chart.setDatasetVisibility(j, j === i));
+        } else if (sel.has(i)) {
+          sel.delete(i);
+          chart.setDatasetVisibility(i, false);
+          if (sel.size === 0)
+            chart.data.datasets.forEach((_, j) => chart.setDatasetVisibility(j, true));
+        } else {
+          sel.add(i);
+          chart.setDatasetVisibility(i, true);
+        }
+        chart.update();
+      };
+    }
+
+    // Returnera alla formulärtyper individuellt (ingen DOPS-aggregering)
+      return Object.fromEntries(Object.entries(byFormType));
     }
     function aggregateByMonth(byFormTypeByMonth) {
+      // Returnera per-månad utan aggregering
       const agg = {};
       Object.entries(byFormTypeByMonth).forEach(([month, data]) => {
-        agg[month] = { label: data.label };
-        Object.entries(data).forEach(([ft, v]) => {
-          if (ft === 'label') return;
-          const key = ft.startsWith('DOPS') ? 'DOPS' : ft;
-          agg[month][key] = (agg[month][key] || 0) + (typeof v === 'number' ? v : 0);
-        });
+        agg[month] = { ...data };
       });
       return agg;
     }
@@ -3864,12 +3878,13 @@
       if (next < fields.length) {
         _setFieldFocus(next);
       } else {
-        // Try Nästa-knapp or submit
+        // Sista fältet besvarat → klicka Nästa/Skicka direkt
+        fields.forEach(f => f.classList.remove('kb-focused'));
         const nextBtn = document.querySelector('#form-questions .btn-row button.btn-primary');
-        if (nextBtn) { fields.forEach(f => f.classList.remove('kb-focused')); nextBtn.focus(); }
+        if (nextBtn) { nextBtn.click(); }
         else {
           const sub = document.getElementById('submit-btn');
-          if (sub && !sub.classList.contains('hidden')) { fields.forEach(f => f.classList.remove('kb-focused')); sub.focus(); }
+          if (sub && !sub.classList.contains('hidden')) sub.click();
         }
       }
     }
