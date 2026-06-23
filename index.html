@@ -1062,7 +1062,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.9.5';
+    const APP_VERSION = 'v3.10.0';
 
     let appData = null;
     let currentUser = null;
@@ -1086,14 +1086,26 @@
 
     function _bk(key) { return (currentUser?.email || '__anon__') + ':' + key; }
     function bgGet(key) { const e = _bgCache[_bk(key)]; return (e && Date.now()-e.ts < BG_TTL) ? e.data : null; }
+    function bgAge(key) { const e = _bgCache[_bk(key)]; return e ? Date.now()-e.ts : Infinity; }
     function bgSet(key, data) { _bgCache[_bk(key)] = { data, ts: Date.now() }; }
     function bgInvalidate(key) { delete _bgCache[_bk(key)]; }
+    // Invalidera alla nycklar för aktuell användare som börjar med prefix (t.ex. 'statistics_')
+    function bgInvalidatePrefix(prefix) {
+      const p = (currentUser?.email || '__anon__') + ':' + prefix;
+      Object.keys(_bgCache).forEach(k => { if (k.startsWith(p)) delete _bgCache[k]; });
+    }
+    const SWR_FRESH_MS = 60 * 1000; // hoppa revalidering om cachen är yngre än detta
 
     // ── Stale-while-revalidate ────────────────────────────────────────────
     async function swr(cacheKey, fetchFn, renderFn, statusEl, diffFn) {
       const cached = bgGet(cacheKey);
       if (cached) {
         renderFn(cached);
+        // Färsk nog (t.ex. nyss laddad via getBootstrap) → hoppa revalidering, spara en request
+        if (bgAge(cacheKey) < SWR_FRESH_MS) {
+          if (statusEl) statusEl.innerHTML = '';
+          return;
+        }
         if (statusEl) statusEl.innerHTML =
           '<span style="font-size:12px;color:#b0a090;display:flex;align-items:center;gap:5px;">' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>' +
@@ -1750,6 +1762,11 @@
         const recipientName  = recipient.split(' -- ')[0];
         const registrarName  = `${currentUser.firstName} ${currentUser.lastName}`;
         const result = await api('saveAnswers', { answerList, recipientEmail, recipientName, registrarName, formType, startTime: window._formStartTime || null });
+        // Invalidera berörda cachar så ny bedömning syns direkt (annars kan 60s-skippen visa gammalt)
+        bgInvalidate('myOverview');
+        bgInvalidate('myAssessments_sent');
+        bgInvalidate('myAssessments_received');
+        bgInvalidatePrefix('statistics_');
         // Återställ och gå tillbaka till startvyn
         savedAnswers = {};
         currentFormData = null;
@@ -3833,6 +3850,19 @@
       if (!currentUser) return;
       const email    = currentUser.email;
       const klinikId = activeKlinikId || currentUser.klinikId || '*';
+      // Försök kombinerad bootstrap (läser Svar en gång i backend)
+      try {
+        const b = await api('getBootstrap', { email, klinikId });
+        if (b && b.overview !== undefined) {
+          bgSet('myOverview',             b.overview);
+          bgSet('myAssessments_received', b.received);
+          bgSet('myAssessments_sent',     b.sent);
+          bgSet('statistics_' + klinikId, b.statistics);
+          bgSet('inbox_' + email,         b.inbox);
+          return;
+        }
+      } catch(e) { /* faller igenom till gamla parallellanrop */ }
+      // Fallback: separata anrop (bakåtkompatibelt om backend saknar getBootstrap)
       try {
         const [ov, myRec, mySent, stat, inb] = await Promise.allSettled([
           api('getMyOverview',    { email, klinikId: currentUser.klinikId }),
