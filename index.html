@@ -795,8 +795,26 @@
 
     <!-- ── REQUEST STATS ────────────────────────────────────────── -->
     <div id="panel-request-stats" class="hidden">
-      <h2>Förfrågningsöversikt</h2>
-      <div id="reqstat-content"><p style="color:#888;">Laddar...</p></div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0;">
+        <h2 style="margin:0;">Förfrågningsöversikt</h2>
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b5c52;">
+          <label for="expiry-select">Inaktuella efter</label>
+          <select id="expiry-select" style="font-size:13px;padding:3px 6px;border:1px solid #d8cfc5;border-radius:4px;background:#f5f1ec;" onchange="saveRequestExpiry(this.value)">
+            <option value="0">Ingen gräns</option>
+            <option value="1">1 vecka</option>
+            <option value="2">2 veckor</option>
+            <option value="3">3 veckor</option>
+            <option value="4">4 veckor</option>
+            <option value="5">5 veckor</option>
+            <option value="6">6 veckor</option>
+            <option value="7">7 veckor</option>
+            <option value="8">8 veckor</option>
+            <option value="9">9 veckor</option>
+            <option value="10">10 veckor</option>
+          </select>
+        </div>
+      </div>
+      <div id="reqstat-content" style="margin-top:16px;"></div>
     </div>
 
     <!-- ── PÅMINNELSER ───────────────────────────────────────────── -->
@@ -878,25 +896,7 @@
 
     <!-- ── INBOX ────────────────────────────────────────────────── -->
     <div id="panel-inbox" class="hidden">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <h2 style="margin:0;">Förfrågningar</h2>
-        <div id="expiry-wrap" class="hidden" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#6b5c52;">
-          <label for="expiry-select">Förfrågningar inaktuella efter</label>
-          <select id="expiry-select" style="font-size:13px;padding:3px 6px;border:1px solid #d8cfc5;border-radius:4px;background:#f5f1ec;" onchange="saveRequestExpiry(this.value)">
-            <option value="0">Ingen gräns</option>
-            <option value="1">1 vecka</option>
-            <option value="2">2 veckor</option>
-            <option value="3">3 veckor</option>
-            <option value="4">4 veckor</option>
-            <option value="5">5 veckor</option>
-            <option value="6">6 veckor</option>
-            <option value="7">7 veckor</option>
-            <option value="8">8 veckor</option>
-            <option value="9">9 veckor</option>
-            <option value="10">10 veckor</option>
-          </select>
-        </div>
-      </div>
+      <h2>Förfrågningar</h2>
       <div id="inbox-swr-status" style="min-height:18px;margin-bottom:6px;"></div>
       <div style="display:flex;gap:10px;margin-bottom:16px;">
         <button class="btn-primary"   id="inbox-tab-inbox"  onclick="setInboxTab('inbox')">Mottagna</button>
@@ -1078,7 +1078,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.11.0';
+    const APP_VERSION = 'v3.11.1';
 
     let appData = null;
     let currentUser = null;
@@ -2965,16 +2965,6 @@
           inboxData = data;
           renderInbox();
           updateInboxBadge();
-          // Visa expiry-kontroll för admin/studierektor
-          const isPriv = activePrivilege === 'Administratör' || activePrivilege === 'Studierektor';
-          const wrap = document.getElementById('expiry-wrap');
-          if (wrap) {
-            show('expiry-wrap', isPriv);
-            if (isPriv) {
-              const sel = document.getElementById('expiry-select');
-              if (sel) sel.value = String(data.expiryWeeks || 0);
-            }
-          }
         },
         document.getElementById('inbox-swr-status'),
         (fresh, old) => Math.max(0, (fresh.inbox?.length||0) - (old.inbox?.length||0))
@@ -3587,7 +3577,13 @@
       const el = document.getElementById('reqstat-content');
       el.innerHTML = '';
       try {
-        const data = await api('getRequestStats', { klinikId: activeKlinikId || currentUser.klinikId || '*' });
+        const klinikId = activeKlinikId || currentUser.klinikId || '*';
+        const [data, settings] = await Promise.all([
+          api('getRequestStats', { klinikId }),
+          klinikId !== '*' ? api('getKlinikSettings', { klinikId }) : Promise.resolve({ requestExpiry: 0 })
+        ]);
+        const sel = document.getElementById('expiry-select');
+        if (sel) sel.value = String(settings.requestExpiry || 0);
         renderRequestStats(data);
       } catch(err) {
         el.innerHTML = '<p class="status-err">Fel: ' + esc(err.message) + '</p>';
