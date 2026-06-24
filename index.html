@@ -1062,7 +1062,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.10.0';
+    const APP_VERSION = 'v3.11.0';
 
     let appData = null;
     let currentUser = null;
@@ -1879,6 +1879,7 @@
       const statusEl = document.getElementById('assessment-swr-status');
 
       if (noFilter) {
+        if (!bgGet(cacheKey)) document.getElementById('my-assessments-list').innerHTML = '<p style="color:#888">Hämtar...</p>';
         await swr(
           cacheKey,
           () => api('getMyAssessments', { email: currentUser.email, role: currentAssessmentRole, filters }),
@@ -3253,6 +3254,17 @@
       const userRole = currentUser.userRole;
       let html = '';
 
+      // Tidsramsknappar längst upp — styr både graf och formulärgrupper
+      const months = Object.values(data.byMonth || {});
+      if (months.length > 0) {
+        html += '<div id="trend-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">';
+        [['1 vecka',7],['1 månad',30],['3 månader',90],['6 månader',180],['1 år',365],['MAX',0]].forEach(([label, days], i) => {
+          const active = i === 3 ? 'background:#3d5c4a;color:#f0ede8;' : 'background:#d8cfc5;color:#2a1f18;';
+          html += `<button onclick="filterTrend(${days},this)" style="border:none;border-radius:4px;padding:4px 10px;font-size:13px;cursor:pointer;${active}">${label}</button>`;
+        });
+        html += '</div>';
+      }
+
       // Totalt sparat-banner
       if (data.totalMinutesSaved > 0 && (userRole === 'Registrerare' || userRole === 'Blandbild')) {
         const h = Math.floor(data.totalMinutesSaved / 60), m = data.totalMinutesSaved % 60;
@@ -3275,16 +3287,9 @@
       // renderFormGroup definierad på modul-nivå
 
       // Trendgraf
-      const months = Object.values(data.byMonth || {});
       if (months.length > 0) {
         html += '<div class="section-header">Trend</div>';
         html += '<div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;margin-top:14px;max-width:700px;">';
-        html += '<div id="trend-filter-btns" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">';
-        [['1 vecka',7],['1 månad',30],['3 månader',90],['6 månader',180],['1 år',365],['MAX',0]].forEach(([label, days], i) => {
-          const active = i === 3 ? 'background:#3d5c4a;color:#f0ede8;' : 'background:#d8cfc5;color:#2a1f18;';
-          html += `<button onclick="filterTrend(${days},this)" style="border:none;border-radius:4px;padding:4px 10px;font-size:13px;cursor:pointer;${active}">${label}</button>`;
-        });
-        html += '</div>';
         html += '<div style="position:relative;width:100%;height:' + (window.innerWidth < 600 ? 400 : 220) + 'px;"><canvas id="overview-chart"></canvas></div></div>';
       }
 
@@ -3862,8 +3867,8 @@
           api('getAssessmentRequests', { email })
         ]);
         if (ov.status    === 'fulfilled') bgSet('myOverview',             ov.value);
-        if (myRec.status === 'fulfilled') bgSet('myAssessments_received', myRec.value);
-        if (mySent.status=== 'fulfilled') bgSet('myAssessments_sent',     mySent.value);
+        if (myRec.status === 'fulfilled' && myRec.value !== undefined) bgSet('myAssessments_received', myRec.value);
+        if (mySent.status=== 'fulfilled' && mySent.value !== undefined) bgSet('myAssessments_sent',     mySent.value);
         if (stat.status  === 'fulfilled') bgSet('statistics_' + klinikId, stat.value);
         if (inb.status   === 'fulfilled') bgSet('inbox_' + email,         inb.value);
       } catch(e) {}
