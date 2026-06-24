@@ -1938,14 +1938,6 @@
       }
     }
     function renderAssessments(assessments, role) {
-      // Förinställ datumfilter vid första laddning
-      const fromEl = document.getElementById('filter-date-from');
-      const toEl   = document.getElementById('filter-date-to');
-      if (fromEl && !fromEl.value && assessments.length) {
-        const earliest = assessments.map(a => a.timestamp).sort()[0];
-        if (earliest) fromEl.value = earliest.slice(0, 10);
-      }
-      if (toEl && !toEl.value) toEl.value = new Date().toISOString().slice(0, 10);
       const list = document.getElementById('my-assessments-list');
       if (!assessments.length) {
         list.innerHTML = '<p style="color:#888">Inga bedömningar hittades.</p>';
