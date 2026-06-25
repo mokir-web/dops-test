@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.8';
+    const APP_VERSION = 'v3.12.9';
 
     let appData = null;
     let currentUser = null;
@@ -3943,8 +3943,8 @@
         html += '<div class="section-header" style="margin-bottom:10px;">Senaste förfrågningar</div>';
         html += '<div style="display:flex;flex-direction:column;gap:8px;">';
         data.requests.slice(0, 20).forEach(r => {
-          const statusColor = r.status === 'Utförd' ? '#4a9e62' : '#c8a96e';
-          const statusText  = r.status === 'Utförd' ? '✓ Utförd' : '⏳ Väntande';
+          const statusColor = r.status === 'Utförd' ? '#4a9e62' : r.status === 'Inaktuell' ? '#9e8e82' : '#c8a96e';
+          const statusText  = r.status === 'Utförd' ? '✓ Utförd' : r.status === 'Inaktuell' ? '✕ Inaktuell' : '⏳ Väntande';
           html += `<div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:6px;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
             <div style="flex:1;min-width:180px;">
               <span style="font-weight:bold;">${esc(r.toName)}</span>
