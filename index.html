@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.0';
+    const APP_VERSION = 'v3.12.1';
 
     let appData = null;
     let currentUser = null;
@@ -1503,8 +1503,8 @@
         radio.closest('label').classList.toggle('disabled-option', isDisabled);
         radio.closest('label').style.opacity = '';
       });
-      // Visa f4 och f5 direkt, men Till bedömning-knappen döljs till mottagare valts
-      show('f4', true);
+      // Stegvis: f4 och f5 dolda tills resp. föregående fält fyllts
+      show('f4', false);
       show('f5', false);
       show('f-till-bedomning', false);
       updateTillBedomningBtn();
@@ -1532,7 +1532,7 @@
       const category = document.querySelector('input[name="category"]:checked')?.value;
       const sel = document.getElementById('recipient');
       sel.innerHTML = '<option value="">-- Välj mottagare --</option>';
-      show('f4', true); show('f5', !!category); show('f6-container', false); show('submit-btn', false);
+      show('f4', !!category); show('f5', false); show('f6-container', false); show('submit-btn', false);
       const group = document.getElementById('form-type-group');
       group.innerHTML = '';
       const checkedFormType = document.querySelector('input[name="formtype"]:checked')?.value;
@@ -1560,9 +1560,8 @@
     }
 
     function updateFormTypes() {
-      // Mottagare vald – visa f5 och Till bedömning-knappen
+      // Mottagare vald – visa f5; knappen hanteras av updateTillBedomningBtn
       show('f5', true);
-      show('f-till-bedomning', true);
       show('f6-container', false);
       show('submit-btn', false);
       updateTillBedomningBtn();
