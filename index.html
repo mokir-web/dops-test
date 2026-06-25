@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.5';
+    const APP_VERSION = 'v3.12.6';
 
     let appData = null;
     let currentUser = null;
@@ -1227,8 +1227,10 @@
         msg.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#3d5c4a;color:#f0ede8;text-align:center;padding:14px;font-size:15px;z-index:9999;';
         msg.textContent = 'Systemet uppdateras till senaste version…';
         document.body.appendChild(msg);
+        const _savedUser = localStorage.getItem('dops_user'); // bevaras genom uppdatering
         Object.keys(localStorage).forEach(k => { if (k.startsWith('dops_')) localStorage.removeItem(k); });
         localStorage.setItem('dops_deployed_version', APP_VERSION);
+        if (_savedUser) localStorage.setItem('dops_user', _savedUser);
         setTimeout(() => location.reload(), 800);
         return;
       }
@@ -3055,7 +3057,6 @@
 
       const sorted = [...submissions].sort((a, b) => new Date(a.ts) - new Date(b.ts));
       const pendingCharts = [];
-      const freeTexts = {};
       let html = '';
 
       formDef.forEach((q, qi) => {
@@ -3111,10 +3112,6 @@
         });
       });
 
-      // Stäng forEach-blocket som öppnades av formDef.forEach — dummyrad
-      if (false) {
-        // 'radio' (t.ex. Roll) hoppas över i progress
-      });
 
       // Fritextsvar
       const ftKeys = Object.keys(freeTextPool).filter(k => freeTextPool[k].length);
