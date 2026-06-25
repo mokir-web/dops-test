@@ -442,6 +442,7 @@
           <button class="sidebar-btn" id="nav-btn-my-assessments" onclick="showPanel('my-assessments')">
             Mina bedömningar <span id="my-assessments-badge" class="hidden" style="background:#9e2a18;color:#fff;border-radius:10px;padding:1px 7px;font-size:12px;margin-left:4px;"></span>
           </button>
+          <button class="sidebar-btn hidden" id="nav-btn-progress" onclick="showPanel('progress')">Min progress</button>
           <button class="sidebar-btn-secondary hidden" id="nav-btn-clinic-overview" onclick="showPanel('clinic-overview')">Kliniköversikt</button>
           <button class="sidebar-btn-secondary hidden" id="nav-btn-request-stats" onclick="showPanel('request-stats')">Förfrågningsöversikt</button>
           <button class="sidebar-btn-secondary hidden" id="nav-btn-admin"           onclick="showPanel('admin')">Administration</button>
@@ -634,6 +635,32 @@
     </div>
 
     <!-- ── ABOUT ─────────────────────────────────────────────────── -->
+
+    <!-- ── MIN PROGRESS / PROGRESS ──────────────────────────────────────── -->
+    <div id="panel-progress" class="hidden">
+      <h2 id="progress-title">Min progress</h2>
+      <div id="progress-recipient-row" class="hidden field" style="max-width:400px;margin-bottom:12px;">
+        <label class="field-label">Läkare</label>
+        <select id="progress-recipient" onchange="onProgressRecipientChange()" style="width:100%;"></select>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
+        <div class="field" style="flex:1 1 200px;max-width:320px;margin:0;">
+          <label class="field-label">Formulärtyp</label>
+          <select id="progress-formtype" onchange="loadProgressData()" style="width:100%;"></select>
+        </div>
+        <div class="field" style="min-width:140px;margin:0;">
+          <label class="field-label">Från</label>
+          <input type="date" id="progress-from" onchange="loadProgressData()" style="width:100%;">
+        </div>
+        <div class="field" style="min-width:140px;margin:0;">
+          <label class="field-label">Till</label>
+          <input type="date" id="progress-to" onchange="loadProgressData()" style="width:100%;">
+        </div>
+      </div>
+      <div id="progress-swr-status" style="min-height:20px;margin-bottom:4px;"></div>
+      <div id="progress-content"></div>
+    </div>
+
     <div id="panel-about" class="hidden">
       <h2>Om MoraDOPS</h2>
       <div style="max-width:720px;">
@@ -1078,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.11.2';
+    const APP_VERSION = 'v3.12.0';
 
     let appData = null;
     let currentUser = null;
@@ -1332,6 +1359,13 @@
       if (remindersBtn) remindersBtn.classList.toggle('hidden', !hasPriv);
       if (adminBtn)  adminBtn.classList.toggle('hidden', !isAdmin);
       if (docsBtn)   docsBtn.classList.toggle('hidden', !isAdmin);
+      // Progresssida: Mottagare, Blandbild samt Studierektor
+      const progressBtn = document.getElementById('nav-btn-progress');
+      const showProgress = (role === 'Mottagare' || role === 'Blandbild') || privilege === 'Studierektor';
+      if (progressBtn) {
+        progressBtn.classList.toggle('hidden', !showProgress);
+        progressBtn.textContent = privilege === 'Studierektor' ? 'Progress' : 'Min progress';
+      }
 
       // Dölj vanliga registrerarpaneler för privilegierade roller
       const regularPanels = ['nav-btn-inbox','nav-btn-assessment','nav-btn-overview','nav-btn-my-assessments'];
@@ -2931,6 +2965,255 @@
       renderInbox();
     }
 
+
+    let _progressCharts = [];
+
+    async function initProgress() {
+      const isStudierektor = activePrivilege === 'Studierektor';
+      const titleEl = document.getElementById('progress-title');
+      if (titleEl) titleEl.textContent = isStudierektor ? 'Progress' : 'Min progress';
+      show('progress-recipient-row', isStudierektor);
+
+      // Fyll läkarväljare för studierektor (en gång)
+      if (isStudierektor) {
+        const recSel = document.getElementById('progress-recipient');
+        if (recSel && recSel.options.length === 0) {
+          recSel.innerHTML = '<option value="">-- Välj läkare --</option>';
+          try {
+            const users = await api('getProgressUsers', { klinikId: activeKlinikId || currentUser.klinikId });
+            users.forEach(u => recSel.appendChild(new Option(u.name, u.email)));
+          } catch(e) { console.warn('getProgressUsers:', e); }
+        }
+      }
+
+      // Fyll formulärtypsväljare (en gång)
+      const ftSel = document.getElementById('progress-formtype');
+      if (ftSel && ftSel.options.length === 0) {
+        ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
+        if (appData && appData.formTypes) {
+          const role = currentUser.userRole || '';
+          const forms = isStudierektor
+            ? [...new Set(Object.values(appData.formTypes).flat())].sort()
+            : (appData.formTypes[role] || []).slice().sort();
+          forms.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
+        }
+      }
+      loadProgressData();
+    }
+
+    function onProgressRecipientChange() {
+      // Återställ formulärtyp och innehåll när läkare byts
+      const ftSel = document.getElementById('progress-formtype');
+      if (ftSel) ftSel.value = '';
+      document.getElementById('progress-content').innerHTML = '';
+    }
+
+    async function loadProgressData() {
+      const isStudierektor = activePrivilege === 'Studierektor';
+      const recipientEmail = isStudierektor
+        ? (document.getElementById('progress-recipient')?.value || '')
+        : currentUser.email;
+      const formType = document.getElementById('progress-formtype')?.value || '';
+      const dateFrom = document.getElementById('progress-from')?.value  || null;
+      const dateTo   = document.getElementById('progress-to')?.value    || null;
+
+      const el       = document.getElementById('progress-content');
+      const statusEl = document.getElementById('progress-swr-status');
+
+      if (!formType || (isStudierektor && !recipientEmail)) {
+        el.innerHTML = '';
+        if (statusEl) statusEl.innerHTML = '';
+        return;
+      }
+
+      _progressCharts.forEach(c => { try { c.destroy(); } catch(_){} });
+      _progressCharts = [];
+
+      const SPIN = '<span style="font-size:12px;color:#9e8e82;display:flex;align-items:center;gap:5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>H\u00e4mtar inneh\u00e5ll\u2026</span>';
+      if (statusEl) statusEl.innerHTML = SPIN;
+      el.innerHTML = '';
+
+      try {
+        const data = await api('getProgressData', { recipientEmail, formType, dateFrom, dateTo });
+        if (statusEl) statusEl.innerHTML = '';
+        renderProgress(data);
+      } catch(e) {
+        if (statusEl) statusEl.innerHTML = '';
+        el.innerHTML = `<p class="status-err">${esc(e.message)}</p>`;
+      }
+    }
+
+    function renderProgress({ submissions, formDef }) {
+      const el = document.getElementById('progress-content');
+      if (!submissions || !submissions.length) {
+        el.innerHTML = '<p style="color:#9e8e82;margin-top:8px;">Inga bed\u00f6mningar hittades f\u00f6r valt urval.</p>';
+        return;
+      }
+
+      const sorted = [...submissions].sort((a, b) => new Date(a.ts) - new Date(b.ts));
+      const pendingCharts = [];
+      const freeTexts = {};
+      let html = '';
+
+      formDef.forEach((q, qi) => {
+        if (q.typ === 'skala') {
+          const points = sorted.map(s => {
+            const a = s.answers.find(a => a.question === q.question);
+            return a ? (parseFloat(a.answer) || null) : null;
+          });
+          const valid = points.filter(p => p !== null);
+          const avg = valid.length
+            ? (valid.reduce((a, b) => a + b, 0) / valid.length).toFixed(1)
+            : null;
+
+          // Detektera skalans max genom att hitta det högsta talet i beskrivningen
+          const allNums = [...q.beskrivning.matchAll(/^(\d+):/mg)].map(m => parseInt(m[1]));
+          const maxScale = allNums.length ? Math.max(...allNums) : 5;
+
+          // Plocka ut beskrivningar per nivå (ta bort mellannivåer utan text)
+          const descParts = q.beskrivning
+            .split(' | ')
+            .map(p => p.trim())
+            .filter(p => /^\d+:\s*.+/.test(p));
+
+          const canvasId = `pgc_${qi}`;
+          html += `<div style="margin-bottom:24px;background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;max-width:700px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
+              <span style="font-weight:bold;font-size:14px;">${esc(q.question)}</span>
+              ${avg !== null ? `<span style="font-size:13px;color:#3d5c4a;font-weight:bold;">\u00d8\u00a0${avg}</span>` : ''}
+            </div>
+            <div style="position:relative;height:170px;"><canvas id="${canvasId}"></canvas></div>
+            ${descParts.length ? `<div style="margin-top:10px;font-size:11px;color:#9e8e82;line-height:1.6;">${descParts.map(p => esc(p)).join('&nbsp;&nbsp;&bull;&nbsp;&nbsp;')}</div>` : ''}
+          </div>`;
+
+          pendingCharts.push({ canvasId, points, sorted, avg, maxScale });
+
+        } else if (q.typ === 'fritext') {
+          freeTexts[q.question] = sorted
+            .map(s => {
+              const a = s.answers.find(a => a.question === q.question);
+              return a && a.answer.trim() ? { ts: s.ts, text: a.answer.trim(), registrar: s.registrar } : null;
+            })
+            .filter(Boolean);
+        }
+        // 'radio' (t.ex. Roll) hoppas över i progress
+      });
+
+      // Fritextsvar
+      const ftKeys = Object.keys(freeTexts).filter(k => freeTexts[k].length);
+      if (ftKeys.length) {
+        html += `<div class="section-header" style="margin-top:4px;margin-bottom:14px;">Fritextsvar</div>`;
+        ftKeys.forEach(question => {
+          html += `<div style="font-weight:bold;font-size:14px;margin:12px 0 6px;">${esc(question)}</div>`;
+          freeTexts[question].forEach(a => {
+            html += `<div style="background:#fff;border:1.5px solid #d8cfc5;border-radius:8px;padding:10px 14px;margin-bottom:8px;max-width:700px;">
+              <div style="font-size:11px;color:#9e8e82;margin-bottom:4px;">${esc(a.ts)} \u2014 ${esc(a.registrar)}</div>
+              <div style="font-size:14px;">${esc(a.text)}</div>
+            </div>`;
+          });
+        });
+      }
+
+      el.innerHTML = html;
+
+      requestAnimationFrame(() => {
+        pendingCharts.forEach(({ canvasId, points, sorted, avg, maxScale }) => {
+          const ctx = document.getElementById(canvasId)?.getContext('2d');
+          if (!ctx) return;
+
+          const dataPoints = sorted
+            .map((s, i) => ({ x: new Date(s.ts).getTime(), y: points[i] }))
+            .filter(d => d.y !== null && !isNaN(d.x));
+
+          if (!dataPoints.length) return;
+
+          const avgVal = avg !== null ? parseFloat(avg) : null;
+          const xMin = dataPoints[0].x;
+          const xMax = dataPoints[dataPoints.length - 1].x;
+
+          const datasets = [{
+            label: 'Po\u00e4ng',
+            data: dataPoints,
+            borderColor: '#3d5c4a',
+            backgroundColor: 'rgba(61,92,74,0.07)',
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointBackgroundColor: '#3d5c4a',
+            pointRadius: 5,
+            pointHoverRadius: 7,
+            spanGaps: false
+          }];
+
+          if (avgVal !== null) {
+            datasets.push({
+              label: `Snitt ${avg}`,
+              data: [{ x: xMin, y: avgVal }, { x: xMax, y: avgVal }],
+              borderColor: '#c8a96e',
+              borderDash: [6, 4],
+              borderWidth: 1.5,
+              pointRadius: 0,
+              fill: false,
+              tension: 0
+            });
+          }
+
+          const chart = new Chart(ctx, {
+            type: 'line',
+            data: { datasets },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              animation: false,
+              scales: {
+                x: {
+                  type: 'linear',
+                  ticks: {
+                    maxTicksLimit: 7,
+                    font: { size: 11 },
+                    callback: v => {
+                      const d = new Date(v);
+                      return isNaN(d) ? '' : d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+                    }
+                  },
+                  grid: { color: 'rgba(0,0,0,0.04)' }
+                },
+                y: {
+                  min: 0.5,
+                  max: maxScale + 0.5,
+                  ticks: {
+                    stepSize: 1,
+                    font: { size: 11 },
+                    callback: v => Number.isInteger(v) ? v : ''
+                  },
+                  grid: {
+                    color: ctx => Number.isInteger(ctx.tick.value)
+                      ? 'rgba(0,0,0,0.07)' : 'transparent'
+                  }
+                }
+              },
+              plugins: {
+                legend: {
+                  display: avgVal !== null,
+                  labels: { font: { size: 11 }, boxWidth: 20, padding: 10 }
+                },
+                tooltip: {
+                  callbacks: {
+                    title: items => {
+                      const d = new Date(items[0].parsed.x);
+                      return isNaN(d) ? '' : d.toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' });
+                    },
+                    label: item => `Po\u00e4ng: ${item.parsed.y}`
+                  }
+                }
+              }
+            }
+          });
+          _progressCharts.push(chart);
+        });
+      });
+    }
+
     function saveRequestExpiry(weeks) {
       const kid = activeKlinikId && activeKlinikId !== '*' ? activeKlinikId : currentUser.klinikId;
       api('saveKlinikSettings', { klinikId: kid, settings: { requestExpiry: parseInt(weeks) || 0 } })
@@ -4202,10 +4485,10 @@
       // Ta bort loading-overlay vid första showPanel
       const loadingEl = document.getElementById('app-loading');
       if (loadingEl) loadingEl.remove();
-      ['assessment','my-assessments','overview','confirmation','clinic-overview','admin','reminders','blank','statistics','documents','about','inbox','request-stats','profile'].forEach(p =>
+      ['assessment','my-assessments','overview','confirmation','clinic-overview','admin','reminders','blank','statistics','documents','about','inbox','request-stats','profile','progress'].forEach(p =>
         show(`panel-${p}`, p === panel)
       );
-      ['assessment','my-assessments','overview','confirmation','clinic-overview','admin','reminders','statistics','documents','about','inbox','request-stats','profile'].forEach(p => {
+      ['assessment','my-assessments','overview','confirmation','clinic-overview','admin','reminders','statistics','documents','about','inbox','request-stats','profile','progress'].forEach(p => {
         const btn = document.getElementById(`nav-btn-${p}`);
         if (btn) btn.classList.toggle('active', p === panel);
       });
@@ -4241,6 +4524,8 @@
       if (panel === 'overview')          { loadMyOverview(); }
       if (panel === 'inbox')            { loadInbox(); }
       if (panel === 'request-stats')    { loadRequestStats(); }
+      if (panel === 'progress')          { initProgress(); }
+      if (panel !== 'progress') { _progressCharts.forEach(c => { try { c.destroy(); } catch(_){} }); _progressCharts = []; }
     }
 
     function show(id, visible) {
