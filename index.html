@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.2';
+    const APP_VERSION = 'v3.12.3';
 
     let appData = null;
     let currentUser = null;
@@ -1572,8 +1572,10 @@
       const category  = document.querySelector('input[name="category"]:checked')?.value;
       const recipient = document.getElementById('recipient').value;
       const formType  = document.querySelector('input[name="formtype"]:checked')?.value;
+      const ready = !!(category && recipient && formType);
       const btn = document.getElementById('till-bedomning-btn');
-      if (btn) btn.disabled = !(category && recipient && formType);
+      if (btn) btn.disabled = !ready;
+      show('f-till-bedomning', ready);
     }
 
     function tillBedomning() {
@@ -2991,10 +2993,11 @@
       if (ftSel && ftSel.options.length === 0) {
         ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
         if (appData && appData.formTypes) {
-          const role = currentUser.userRole || '';
-          const forms = isStudierektor
-            ? [...new Set(Object.values(appData.formTypes).flat())].sort()
-            : (appData.formTypes[role] || []).slice().sort();
+          const jobRole = currentUser.jobRole || '';
+          const allForms = [...new Set(Object.values(appData.formTypes).flat())].sort();
+          const forms = isStudierektor || !jobRole
+            ? allForms
+            : (appData.formTypes[jobRole]?.slice().sort() || allForms);
           forms.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
         }
       }
