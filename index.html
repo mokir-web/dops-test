@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.11';
+    const APP_VERSION = 'v3.12.12';
 
     let appData = null;
     let currentUser = null;
@@ -1922,6 +1922,8 @@
       currentAssessmentRole = role;
       document.getElementById('tab-sent').className     = role === 'sent'     ? 'btn-primary' : 'btn-secondary';
       document.getElementById('tab-received').className = role === 'received' ? 'btn-primary' : 'btn-secondary';
+      document.getElementById('my-assessments-list').innerHTML = '';
+      if (role === 'received') clearAssessmentBadge();
       applyFilters();
     }
 
@@ -3242,6 +3244,26 @@
         .catch(e => console.error('saveRequestExpiry:', e));
     }
 
+
+    function updateAssessmentBadge() {
+      const data = bgGet('myAssessments_received');
+      if (!data || !currentUser) return;
+      const key      = 'dops_rec_seen_' + currentUser.email;
+      const lastSeen = parseInt(localStorage.getItem(key) || '0');
+      const newCount = Math.max(0, data.length - lastSeen);
+      const badge    = document.getElementById('my-assessments-badge');
+      if (!badge) return;
+      badge.textContent = newCount > 0 ? String(newCount) : '';
+      badge.classList.toggle('hidden', newCount === 0);
+    }
+
+    function clearAssessmentBadge() {
+      const data = bgGet('myAssessments_received');
+      if (!data || !currentUser) return;
+      localStorage.setItem('dops_rec_seen_' + currentUser.email, String(data.length));
+      updateAssessmentBadge();
+    }
+
     async function loadInboxBadge() {
       try {
         inboxData = await api('getAssessmentRequests', { email: currentUser.email });
@@ -4207,7 +4229,7 @@
           api('getAssessmentRequests', { email })
         ]);
         if (ov.status    === 'fulfilled') bgSet('myOverview',             ov.value);
-        if (myRec.status === 'fulfilled' && myRec.value !== undefined) bgSet('myAssessments_received', myRec.value);
+        if (myRec.status === 'fulfilled' && myRec.value !== undefined) { bgSet('myAssessments_received', myRec.value); updateAssessmentBadge(); }
         if (mySent.status=== 'fulfilled' && mySent.value !== undefined) bgSet('myAssessments_sent',     mySent.value);
         if (stat.status  === 'fulfilled') bgSet('statistics_' + klinikId, stat.value);
         if (inb.status   === 'fulfilled') bgSet('inbox_' + email,         inb.value);
@@ -4522,7 +4544,7 @@
       closeMenu();
       closeMenu();
       if (panel === 'assessment')       { resetAssessment(); }
-      if (panel === 'my-assessments')   { applyFilters(); }
+      if (panel === 'my-assessments')   { clearAssessmentBadge(); applyFilters(); }
       if (panel === 'statistics') {
         // Visa klinikväljare för global admin
         const statKlinikRow = document.getElementById('stat-klinik-row');
