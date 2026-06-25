@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.10';
+    const APP_VERSION = 'v3.12.11';
 
     let appData = null;
     let currentUser = null;
@@ -2990,27 +2990,31 @@
         }
       }
 
-      // Fyll formulärtypsväljare (en gång)
+      // Fyll formulärtypsväljare — bara formulär användaren faktiskt fått bedömningar på
       const ftSel = document.getElementById('progress-formtype');
       if (ftSel && ftSel.options.length === 0) {
         ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
-        if (appData && appData.formTypes) {
-          const jobRole = currentUser.jobRole || '';
-          const allForms = [...new Set(Object.values(appData.formTypes).flat())].sort();
-          const forms = isStudierektor || !jobRole
-            ? allForms
-            : (appData.formTypes[jobRole]?.slice().sort() || allForms);
-          forms.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
+        if (!isStudierektor) {
+          try {
+            const fts = await api('getProgressFormTypes', { recipientEmail: currentUser.email });
+            fts.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
+          } catch(e) { console.warn('getProgressFormTypes:', e); }
         }
       }
       loadProgressData();
     }
 
-    function onProgressRecipientChange() {
-      // Återställ formulärtyp och innehåll när läkare byts
+    async function onProgressRecipientChange() {
       const ftSel = document.getElementById('progress-formtype');
-      if (ftSel) ftSel.value = '';
+      ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
       document.getElementById('progress-content').innerHTML = '';
+      const email = document.getElementById('progress-recipient')?.value;
+      if (email) {
+        try {
+          const fts = await api('getProgressFormTypes', { recipientEmail: email });
+          fts.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
+        } catch(e) { console.warn('getProgressFormTypes:', e); }
+      }
     }
 
     async function loadProgressData() {
@@ -3199,8 +3203,8 @@
                   grid: { color: 'rgba(0,0,0,0.04)' }
                 },
                 y: {
-                  min: minScale,
-                  max: maxScale,
+                  min: minScale - 0.5,
+                  max: maxScale + 0.5,
                   afterBuildTicks: scale => {
                     scale.ticks = [];
                     for (let i = minScale; i <= maxScale; i++) scale.ticks.push({ value: i });
@@ -3299,6 +3303,11 @@
           btn.textContent = 'Utför bedömning';
           btn.onclick = () => startRequestedAssessment(item);
           card.appendChild(btn);
+        } else if (!isInbox && item.status === 'Inaktuell') {
+          const tag = document.createElement('div');
+          tag.style.cssText = 'margin-top:8px;font-size:13px;color:#9e8e82;font-weight:bold;';
+          tag.textContent = '× Inaktuell — förfrågan har passerat tidsgränsen';
+          card.appendChild(tag);
         } else if (!isInbox && item.status !== 'Utförd') {
           const doneBtn = document.createElement('button');
           doneBtn.className = 'btn-secondary btn-small';
