@@ -1086,8 +1086,8 @@
 
         <!-- Spara/avbryt -->
         <div class="btn-row" style="margin-top:28px;">
-          <button class="btn-primary" onclick="saveProfile()">Spara ändringar</button>
-          <button class="btn-secondary" onclick="goToStartPage()">Avbryt</button>
+          <button id="profile-save-btn" class="btn-primary" onclick="saveProfile()" disabled>Spara ändringar</button>
+          <button class="btn-secondary" onclick="showPanel('blank')">Avbryt</button>
         </div>
         <div id="profile-role-status"></div>
         <div id="profile-pin-status"></div>
@@ -1109,7 +1109,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.14.0';
+    const APP_VERSION = 'v3.15.1';
 
     let appData = null;
     let currentUser = null;
@@ -1409,6 +1409,20 @@
       const reqBtn = document.getElementById('inbox-request-btn');
       if (inboxOutboxTab) inboxOutboxTab.classList.toggle('hidden', isRegistrerare);
       if (reqBtn) reqBtn.classList.toggle('hidden', isRegistrerare);
+
+      // Mottagare-specifika begränsningar (ej privilegierad)
+      const isMottagare = !hasPriv && _role === 'Mottagare';
+      // Mina bedömningar: dölj Skickade-fliken (de tar bara emot bedömningar)
+      const tabSentEl = document.getElementById('tab-sent');
+      if (tabSentEl) tabSentEl.classList.toggle('hidden', isMottagare);
+      // Förfrågningar: dölj Mottagna-fliken (de skickar förfrågningar, tar emot bedömningar)
+      const inboxInboxTab = document.getElementById('inbox-tab-inbox');
+      if (inboxInboxTab) inboxInboxTab.classList.toggle('hidden', isMottagare);
+      if (isMottagare) {
+        currentInboxTab = 'outbox';
+        const ob = document.getElementById('inbox-tab-outbox');
+        if (ob) ob.className = 'btn-primary';
+      }
 
       if (roleLabel) {
         const privs = currentUser.privileges || [];
@@ -2779,6 +2793,43 @@
     }
 
     // ── Profile ───────────────────────────────────────────────────
+    let _profileSnapshot = null;
+
+    function _snapshotProfile() {
+      const g = id => document.getElementById(id);
+      _profileSnapshot = {
+        firstName:           (g('profile-firstname')?.value   || '').trim(),
+        lastName:            (g('profile-lastname')?.value    || '').trim(),
+        email:               (g('profile-email-input')?.value || '').trim().toLowerCase(),
+        clinic:              g('profile-clinic-input')?.value  || '',
+        jobRole:             g('profile-jobrole')?.value       || '',
+        userRole:            g('profile-userrole')?.value      || '',
+        emailNotify:         !!(g('profile-email-notify')?.checked),
+        emailNotifyRequests: !!(g('profile-email-notify-requests')?.checked),
+        startPage:           g('profile-startpage')?.value     || '',
+      };
+    }
+
+    function _checkProfileDirty() {
+      const g   = id => document.getElementById(id);
+      const btn = document.getElementById('profile-save-btn');
+      if (!btn || !_profileSnapshot) return;
+      const p = _profileSnapshot;
+      const dirty =
+        (g('profile-firstname')?.value   || '').trim()              !== p.firstName ||
+        (g('profile-lastname')?.value    || '').trim()              !== p.lastName  ||
+        (g('profile-email-input')?.value || '').trim().toLowerCase() !== p.email    ||
+        (g('profile-clinic-input')?.value || '')                    !== p.clinic    ||
+        (g('profile-jobrole')?.value     || '')                     !== p.jobRole   ||
+        (g('profile-userrole')?.value    || '')                     !== p.userRole  ||
+        !!(g('profile-email-notify')?.checked)                      !== p.emailNotify ||
+        !!(g('profile-email-notify-requests')?.checked)             !== p.emailNotifyRequests ||
+        (g('profile-startpage')?.value   || '')                     !== p.startPage ||
+        !!(g('profile-current-pin')?.value) ||
+        !!(g('profile-new-pin')?.value);
+      btn.disabled = !dirty;
+    }
+
     function prefillProfile() {
       const s = id => document.getElementById(id);
       if (s('profile-firstname'))    s('profile-firstname').value    = currentUser.firstName  || '';
@@ -2822,11 +2873,26 @@
       if (s('profile-new-pin'))      s('profile-new-pin').value      = '';
       const statusEls = ['profile-role-status','profile-pin-status'];
       statusEls.forEach(id => { if (s(id)) s(id).textContent = ''; });
+      // Snapshot + inaktivera knappen tills något ändras
+      _snapshotProfile();
+      const profileSaveBtn = document.getElementById('profile-save-btn');
+      if (profileSaveBtn) profileSaveBtn.disabled = true;
+      // Koppla dirty-kontroll (avregistrera först för att undvika dubletter)
+      ['profile-firstname','profile-lastname','profile-email-input','profile-clinic-input',
+       'profile-jobrole','profile-userrole','profile-email-notify','profile-email-notify-requests',
+       'profile-startpage','profile-current-pin','profile-new-pin'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.removeEventListener('input',  _checkProfileDirty);
+        el.removeEventListener('change', _checkProfileDirty);
+        el.addEventListener('input',  _checkProfileDirty);
+        el.addEventListener('change', _checkProfileDirty);
+      });
     }
 
     async function saveProfile() {
       const s = id => document.getElementById(id);
-      const saveBtn = document.getElementById('panel-profile')?.querySelector('button[onclick*="saveProfile"]');
+      const saveBtn = document.getElementById('profile-save-btn');
       const origSaveBtnText = saveBtn?.textContent || 'Spara \u00e4ndringar';
       const firstName   = (s('profile-firstname')?.value    || '').trim();
       const lastName    = (s('profile-lastname')?.value     || '').trim();
@@ -2884,7 +2950,12 @@
         prefillAssessment();
         if (newPin) setStatus('profile-pin-status', '✓ PIN ändrad!', false);
         localStorage.removeItem('dops_appdata');
-        setTimeout(() => { if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } goToStartPage(); }, 2000);
+        // Rensa PIN-fält, ta ny snapshot och inaktivera knappen (inga osparade ändringar kvar)
+        const s3 = id => document.getElementById(id);
+        if (s3('profile-current-pin')) s3('profile-current-pin').value = '';
+        if (s3('profile-new-pin'))     s3('profile-new-pin').value     = '';
+        if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = true; }
+        _snapshotProfile();
       } catch(err) { setStatus('profile-role-status', err.message, true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } }
     }
 
@@ -3706,7 +3777,10 @@
 
       // Trendgraf
       if (months.length > 0) {
-        html += '<div class="section-header">Trend</div>';
+        const trendLabel = (showSent && !showReceived)  ? 'Skickade bed\u00f6mningar'
+                         : (!showSent && showReceived) ? 'Mottagna bed\u00f6mningar'
+                         : 'Trend';
+        html += `<div class="section-header">${trendLabel}</div>`;
         html += '<div style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;margin-top:14px;max-width:700px;">';
         html += '<div style="position:relative;width:100%;height:' + (window.innerWidth < 600 ? 400 : 220) + 'px;"><canvas id="overview-chart"></canvas></div></div>';
       }
@@ -4252,7 +4326,7 @@
       // Sparat val: Sheets (via login) har prioritet, localStorage är fallback
       const saved = currentUser?.startPage || localStorage.getItem('dops_startpage_' + (currentUser?.email || ''));
       if (saved) return saved;
-      if (priv === 'Administratör' || role === 'Administratör') return 'admin';
+      if (priv === 'Administratör') return 'admin';
       if (priv === 'Studierektor')  return 'clinic-overview';
       if (role === 'Mottagare' || role === 'Blandbild') return 'my-assessments';
       return 'assessment';
@@ -4285,11 +4359,11 @@
       if (role === 'Mottagare' || role === 'Blandbild' || priv === 'Studierektor') {
         base.push({ value: 'progress', label: priv === 'Studierektor' ? 'Progress' : 'Min progress' });
       }
-      if (priv === 'Studierektor' || priv === 'Administratör' || role === 'Administratör') {
+      if (priv === 'Studierektor' || priv === 'Administratör') {
         base.push({ value: 'clinic-overview', label: 'Kliniköversikt' });
         base.push({ value: 'request-stats',   label: 'Förfrågningsöversikt' });
       }
-      if (priv === 'Administratör' || role === 'Administratör') {
+      if (priv === 'Administratör') {
         base.push({ value: 'admin', label: 'Administration' });
       }
       return base;
