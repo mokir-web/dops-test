@@ -1078,7 +1078,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.11.1';
+    const APP_VERSION = 'v3.11.2';
 
     let appData = null;
     let currentUser = null;
@@ -1143,14 +1143,16 @@
           }
         } catch(e) { if (statusEl) statusEl.innerHTML = ''; }
       } else {
-        if (statusEl) statusEl.innerHTML = '';
+        if (statusEl) statusEl.innerHTML = '<span style="font-size:12px;color:#9e8e82;display:flex;align-items:center;gap:5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Hämtar innehåll…</span>';
         try {
           const fresh = await fetchFn();
           bgSet(cacheKey, fresh);
           renderFn(fresh);
         } catch(e) {
           if (statusEl) statusEl.innerHTML = `<p class="status-err">Kunde inte hämta data: ${esc(e.message)}</p>`;
+          return;
         }
+        if (statusEl) statusEl.innerHTML = '';
       }
     }
 
@@ -2065,7 +2067,7 @@
         formTypes: [...document.querySelectorAll('#co-formtypes input:checked')].map(cb => cb.value)
       };
       const list = document.getElementById('co-list');
-      list.innerHTML = '';
+      list.innerHTML = '<p style="color:#9e8e82;font-size:13px;">Hämtar innehåll…</p>';
       show('co-select-wrap', false);
       try {
         const assessments = await api('getClinicAssessments', { klinikId, filters });
@@ -2215,7 +2217,7 @@
     async function loadAdminPanel() {
       showClinicList();
       const el = document.getElementById('admin-clinic-list');
-      el.innerHTML = '';
+      el.innerHTML = '<p style="color:#9e8e82;font-size:13px;">Hämtar innehåll…</p>';
       try {
         // Hämta alltid alla användare för admin (filtrera lokalt)
         const result = await api('getAllUsers', { klinikId: '*' });
@@ -2587,6 +2589,7 @@
           );
           return;
         }
+        if (statusEl) statusEl.innerHTML = '<span style="font-size:12px;color:#9e8e82;display:flex;align-items:center;gap:5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>Hämtar innehåll…</span>';
         stats = await api('getStatistics', { filters: { dateFrom, dateTo }, klinikId: effectiveStatKlinik });
         renderStatistics(stats, checkedForms);
       } catch(err) {
@@ -2929,7 +2932,8 @@
     }
 
     function saveRequestExpiry(weeks) {
-      api('saveKlinikSettings', { klinikId: currentUser.klinikId, settings: { requestExpiry: parseInt(weeks) || 0 } })
+      const kid = activeKlinikId && activeKlinikId !== '*' ? activeKlinikId : currentUser.klinikId;
+      api('saveKlinikSettings', { klinikId: kid, settings: { requestExpiry: parseInt(weeks) || 0 } })
         .then(() => { bgInvalidate('inbox_' + currentUser.email); loadInbox(); })
         .catch(e => console.error('saveRequestExpiry:', e));
     }
@@ -3433,6 +3437,7 @@
     async function loadSchedules() {
       const el = document.getElementById('schedule-list');
       if (!el) return;
+      el.innerHTML = '<p style="color:#9e8e82;font-size:13px;">Hämtar innehåll…</p>';
       const klinikId = activeKlinikId || currentUser.klinikId || '*';
       try {
         const schedules = await api('getScheduledEmails', { klinikId });
@@ -3575,7 +3580,7 @@
     }
     async function loadRequestStats() {
       const el = document.getElementById('reqstat-content');
-      el.innerHTML = '';
+      el.innerHTML = '<p style="color:#9e8e82;font-size:13px;">Hämtar innehåll…</p>';
       try {
         const klinikId = activeKlinikId || currentUser.klinikId || '*';
         const [data, settings] = await Promise.all([
