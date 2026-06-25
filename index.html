@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.3';
+    const APP_VERSION = 'v3.12.5';
 
     let appData = null;
     let currentUser = null;
@@ -3070,7 +3070,7 @@
             : null;
 
           // Detektera skalans max genom att hitta det högsta talet i beskrivningen
-          const allNums = [...q.beskrivning.matchAll(/^(\d+):/mg)].map(m => parseInt(m[1]));
+          const allNums = [...q.beskrivning.matchAll(/(\d+):/g)].map(m => parseInt(m[1]));
           const maxScale = allNums.length ? Math.max(...allNums) : 5;
 
           // Plocka ut beskrivningar per nivå (ta bort mellannivåer utan text)
@@ -3091,24 +3091,38 @@
 
           pendingCharts.push({ canvasId, points, sorted, avg, maxScale });
 
-        } else if (q.typ === 'fritext') {
-          freeTexts[q.question] = sorted
-            .map(s => {
-              const a = s.answers.find(a => a.question === q.question);
-              return a && a.answer.trim() ? { ts: s.ts, text: a.answer.trim(), registrar: s.registrar } : null;
-            })
-            .filter(Boolean);
         }
+        // fritext hanteras separat nedan (pool-metod)
+      });
+
+      // Fritextpool: samla ALLA fritext-svar direkt från sparade frågetexter
+      // (hanterar frågetext-ändringar mellan formulärversioner)
+      const freitextQuestions = new Set(
+        formDef.filter(q => q.typ === 'fritext').map(q => q.question.trim().toLowerCase())
+      );
+      const freeTextPool = {};
+      sorted.forEach(s => {
+        s.answers.forEach(a => {
+          if (!a.answer.trim()) return;
+          if (!freitextQuestions.has(a.question.trim().toLowerCase())) return;
+          const key = a.question.trim();
+          if (!freeTextPool[key]) freeTextPool[key] = [];
+          freeTextPool[key].push({ ts: s.ts, text: a.answer.trim(), registrar: s.registrar });
+        });
+      });
+
+      // Stäng forEach-blocket som öppnades av formDef.forEach — dummyrad
+      if (false) {
         // 'radio' (t.ex. Roll) hoppas över i progress
       });
 
       // Fritextsvar
-      const ftKeys = Object.keys(freeTexts).filter(k => freeTexts[k].length);
+      const ftKeys = Object.keys(freeTextPool).filter(k => freeTextPool[k].length);
       if (ftKeys.length) {
         html += `<div class="section-header" style="margin-top:4px;margin-bottom:14px;">Fritextsvar</div>`;
         ftKeys.forEach(question => {
           html += `<div style="font-weight:bold;font-size:14px;margin:12px 0 6px;">${esc(question)}</div>`;
-          freeTexts[question].forEach(a => {
+          freeTextPool[question].forEach(a => {
             html += `<div style="background:#fff;border:1.5px solid #d8cfc5;border-radius:8px;padding:10px 14px;margin-bottom:8px;max-width:700px;">
               <div style="font-size:11px;color:#9e8e82;margin-bottom:4px;">${esc(a.ts)} \u2014 ${esc(a.registrar)}</div>
               <div style="font-size:14px;">${esc(a.text)}</div>
