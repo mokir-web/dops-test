@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.12';
+    const APP_VERSION = 'v3.13.0';
 
     let appData = null;
     let currentUser = null;
@@ -1799,6 +1799,8 @@
     async function submitAssessment() {
       if (_isProcessing) return;
       const submitBtn = document.getElementById('submit-btn');
+      const origSubmitText = submitBtn?.textContent || 'Skicka bedömning';
+      if (submitBtn) submitBtn.textContent = 'Skickar\u2026';
       lockUI();
       const meta = window._pendingAssessmentMeta;
       const category  = meta?.category  || document.querySelector('input[name="category"]:checked')?.value;
@@ -1900,7 +1902,7 @@
 
                 setTimeout(() => { status.textContent = ''; }, 4000);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch(err) { setStatus('assessment-status', err.message, true); unlockUI(); }
+      } catch(err) { if (submitBtn) submitBtn.textContent = origSubmitText; setStatus('assessment-status', err.message, true); unlockUI(); }
     }
 
     // ── My assessments ────────────────────────────────────────────
@@ -1980,15 +1982,18 @@
       assessments.forEach(a => { counts[a.formType] = (counts[a.formType]||0)+1; });
       const container = document.getElementById('filter-formtypes');
       if (!container) return;
+      // Spara befintligt val innan rebuild så SWR-revalidering inte nollställer filter
+      const prevChecked = new Set([...container.querySelectorAll('input[type=checkbox]:checked')].map(cb => cb.value));
       container.innerHTML = '';
       types.forEach(t => {
         const lbl = document.createElement('label'); lbl.className = 'filter-chip';
         const cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = t;
+        if (prevChecked.has(t)) cb.checked = true;
         lbl.appendChild(cb);
         lbl.appendChild(document.createTextNode(`${t} (${counts[t]})`));
         container.appendChild(lbl);
       });
-      // Tillämpa pending filter från navigateToAssessments
+      // Tillämpa pending filter från navigateToAssessments (överskriver sparat val)
       if (_pendingFormFilter) {
         const pf = _pendingFormFilter; _pendingFormFilter = null;
         container.querySelectorAll('input[type=checkbox]').forEach(cb => { cb.checked = cb.value === pf; });
@@ -2799,6 +2804,8 @@
 
     async function saveProfile() {
       const s = id => document.getElementById(id);
+      const saveBtn = document.getElementById('panel-profile')?.querySelector('button[onclick*="saveProfile"]');
+      const origSaveBtnText = saveBtn?.textContent || 'Spara \u00e4ndringar';
       const firstName   = (s('profile-firstname')?.value    || '').trim();
       const lastName    = (s('profile-lastname')?.value     || '').trim();
       const newEmail    = (s('profile-email-input')?.value  || '').trim().toLowerCase();
@@ -2817,14 +2824,15 @@
       if (!clinic) { setStatus('profile-role-status', 'Välj en klinik.', true); return; }
 
       setStatus('profile-role-status', '⏳ Sparar...', false);
+      if (saveBtn) { saveBtn.textContent = 'Sparar\u2026'; saveBtn.disabled = true; }
 
       try {
         // Verifiera PIN om byte önskas
         if (newPin) {
-          if (!/^\d{4,6}$/.test(newPin)) { setStatus('profile-pin-status', 'Ny PIN måste vara 4–6 siffror.', true); return; }
-          if (!currentPin) { setStatus('profile-pin-status', 'Ange nuvarande PIN för att byta.', true); return; }
+          if (!/^\d{4,6}$/.test(newPin)) { setStatus('profile-pin-status', 'Ny PIN måste vara 4–6 siffror.', true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } return; }
+          if (!currentPin) { setStatus('profile-pin-status', 'Ange nuvarande PIN för att byta.', true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } return; }
           const check = await api('login', { email: currentUser.email, pin: currentPin });
-          if (!check || check.locked || check.failed) { setStatus('profile-pin-status', 'Nuvarande PIN är felaktig.', true); return; }
+          if (!check || check.locked || check.failed) { setStatus('profile-pin-status', 'Nuvarande PIN är felaktig.', true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } return; }
         }
 
         const result = await api('updateProfile', {
@@ -2833,7 +2841,7 @@
             emailNotify, emailNotifyRequests, startPage,
             ...(newPin ? { newPin } : {}) }
         });
-        if (result.error) { setStatus('profile-role-status', result.error, true); return; }
+        if (result.error) { setStatus('profile-role-status', result.error, true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } return; }
 
         currentUser.firstName          = firstName;
         currentUser.lastName           = lastName;
@@ -2856,7 +2864,8 @@
         setStatus('profile-role-status', '✓ Profil sparad!', false);
         if (newPin) setStatus('profile-pin-status', '✓ PIN ändrad!', false);
         localStorage.removeItem('dops_appdata');
-      } catch(err) { setStatus('profile-role-status', err.message, true); }
+        setTimeout(() => { if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } goToStartPage(); }, 2000);
+      } catch(err) { setStatus('profile-role-status', err.message, true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } }
     }
 
     async function confirmDeleteProfile() {
@@ -2980,15 +2989,20 @@
       if (titleEl) titleEl.textContent = isStudierektor ? 'Progress' : 'Min progress';
       show('progress-recipient-row', isStudierektor);
 
+      const statusEl  = document.getElementById('progress-swr-status');
+      const SPIN = '<span style="font-size:12px;color:#9e8e82;display:flex;align-items:center;gap:5px;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation:spin 1.2s linear infinite"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>H\u00e4mtar inneh\u00e5ll\u2026</span>';
+
       // Fyll läkarväljare för studierektor (en gång)
       if (isStudierektor) {
         const recSel = document.getElementById('progress-recipient');
         if (recSel && recSel.options.length === 0) {
           recSel.innerHTML = '<option value="">-- Välj läkare --</option>';
+          if (statusEl) statusEl.innerHTML = SPIN;
           try {
             const users = await api('getProgressUsers', { klinikId: activeKlinikId || currentUser.klinikId });
             users.forEach(u => recSel.appendChild(new Option(u.name, u.email)));
           } catch(e) { console.warn('getProgressUsers:', e); }
+          if (statusEl) statusEl.innerHTML = '';
         }
       }
 
@@ -2997,10 +3011,12 @@
       if (ftSel && ftSel.options.length === 0) {
         ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
         if (!isStudierektor) {
+          if (statusEl) statusEl.innerHTML = SPIN;
           try {
             const fts = await api('getProgressFormTypes', { recipientEmail: currentUser.email });
             fts.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
           } catch(e) { console.warn('getProgressFormTypes:', e); }
+          if (statusEl) statusEl.innerHTML = '';
         }
       }
       loadProgressData();
@@ -3032,7 +3048,10 @@
       const statusEl = document.getElementById('progress-swr-status');
 
       if (!formType || (isStudierektor && !recipientEmail)) {
-        el.innerHTML = '';
+        if (el) {
+          const showGuide = !formType && (!isStudierektor || !!recipientEmail);
+          el.innerHTML = showGuide ? '<p style="color:#9e8e82;margin-top:8px;">V\u00e4lj formulärtyp ovan f\u00f6r att visa din progress.</p>' : '';
+        }
         if (statusEl) statusEl.innerHTML = '';
         return;
       }
@@ -3248,10 +3267,12 @@
     function updateAssessmentBadge() {
       const data = bgGet('myAssessments_received');
       if (!data || !currentUser) return;
-      const key      = 'dops_rec_seen_' + currentUser.email;
-      const lastSeen = parseInt(localStorage.getItem(key) || '0');
-      const newCount = Math.max(0, data.length - lastSeen);
-      const badge    = document.getElementById('my-assessments-badge');
+      const key        = 'dops_rec_seen_' + currentUser.email;
+      const serverSeen = currentUser.seenAssessmentCount || 0;
+      const localSeen  = parseInt(localStorage.getItem(key) || '0');
+      const lastSeen   = Math.max(serverSeen, localSeen);
+      const newCount   = Math.max(0, data.length - lastSeen);
+      const badge      = document.getElementById('my-assessments-badge');
       if (!badge) return;
       badge.textContent = newCount > 0 ? String(newCount) : '';
       badge.classList.toggle('hidden', newCount === 0);
@@ -3260,7 +3281,10 @@
     function clearAssessmentBadge() {
       const data = bgGet('myAssessments_received');
       if (!data || !currentUser) return;
-      localStorage.setItem('dops_rec_seen_' + currentUser.email, String(data.length));
+      const count = data.length;
+      localStorage.setItem('dops_rec_seen_' + currentUser.email, String(count));
+      currentUser.seenAssessmentCount = count;
+      api('setSeenAssessmentCount', { email: currentUser.email, count }).catch(() => {});
       updateAssessmentBadge();
     }
 
@@ -3286,7 +3310,7 @@
 
     async function loadInbox() {
       const notifyChk = document.getElementById('inbox-email-notify');
-      if (notifyChk) notifyChk.checked = currentUser.emailNotify !== false;
+      if (notifyChk) notifyChk.checked = currentUser.emailNotifyRequests !== false;
       await swr(
         'inbox_' + currentUser.email,
         () => api('getAssessmentRequests', { email: currentUser.email, klinikId: currentUser.klinikId }),
@@ -3409,23 +3433,26 @@
     async function sendRequest() {
       if (_isProcessing) return;
       const btn = document.querySelector('#request-form .btn-primary');
+      const origBtnText = btn?.textContent || 'Skicka f\u00f6rfr\u00e5gan';
+      if (btn) btn.textContent = 'Skickar\u2026';
       lockUI();
       const toName   = document.getElementById('request-to').value;
       const message  = document.getElementById('request-message').value.trim();
       const formType = document.getElementById('request-formtype')?.value || '';
-      if (!toName)   { setStatus('request-status', 'Välj en kollega.', true); unlockUI(); return; }
-      if (!message)  { setStatus('request-status', 'Skriv ett meddelande.', true); unlockUI(); return; }
+      if (!toName)   { setStatus('request-status', 'Välj en kollega.', true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
+      if (!message)  { setStatus('request-status', 'Skriv ett meddelande.', true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
       try {
         const toEmail = await api('getRecipientEmail', { recipientFullName: toName });
-        if (!toEmail) { setStatus('request-status', 'Kunde inte hitta e-post för ' + esc(toName), true); unlockUI(); return; }
+        if (!toEmail) { setStatus('request-status', 'Kunde inte hitta e-post för ' + esc(toName), true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
         setStatus('request-status', '⏳ Skickar...', false);
         await api('sendAssessmentRequest', { fromEmail: currentUser.email, toEmail, message, formType });
         setStatus('request-status', '✓ Förfrågan skickad!', false);
         document.getElementById('request-message').value = '';
         document.getElementById('request-to').value = '';
+        if (btn) btn.textContent = origBtnText;
         unlockUI();
         setTimeout(() => { hideRequestForm(); loadInbox(); }, 1500);
-      } catch(err) { setStatus('request-status', err.message, true); unlockUI(); }
+      } catch(err) { setStatus('request-status', err.message, true); if (btn) btn.textContent = origBtnText; unlockUI(); }
     }
 
     function startRequestedAssessment(item) {
@@ -4039,13 +4066,15 @@
     async function sendBulkRequest() {
       if (_isProcessing) return;
       const btn = document.querySelector('#bulk-request-form .btn-primary');
+      const origBtnText = btn?.textContent || 'Skicka till markerade';
+      if (btn) btn.textContent = 'Skickar\u2026';
       lockUI();
       const formType = document.getElementById('bulk-formtype').value;
       const message  = document.getElementById('bulk-message').value.trim();
       const selected = [...document.querySelectorAll('.bulk-recipient-cb:checked')].map(cb => cb.value);
-      if (!formType)       { setStatus('bulk-status', 'Välj formulärtyp.', true); unlockUI(); return; }
-      if (!selected.length){ setStatus('bulk-status', 'Markera minst en mottagare.', true); unlockUI(); return; }
-      if (!message)        { setStatus('bulk-status', 'Skriv ett meddelande.', true); unlockUI(); return; }
+      if (!formType)       { setStatus('bulk-status', 'Välj formulärtyp.', true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
+      if (!selected.length){ setStatus('bulk-status', 'Markera minst en mottagare.', true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
+      if (!message)        { setStatus('bulk-status', 'Skriv ett meddelande.', true); if (btn) btn.textContent = origBtnText; unlockUI(); return; }
 
       setStatus('bulk-status', '⏳ Skickar...', false);
       try {
@@ -4060,9 +4089,10 @@
           formType
         });
         setStatus('bulk-status', `✓ Skickade till ${result.sent} personer!`, false);
+        if (btn) btn.textContent = origBtnText;
         unlockUI();
         setTimeout(() => { hideBulkRequestForm(); loadInbox(); }, 1500);
-      } catch(err) { setStatus('bulk-status', err.message, true); unlockUI(); }
+      } catch(err) { setStatus('bulk-status', err.message, true); if (btn) btn.textContent = origBtnText; unlockUI(); }
     }
 
     function setTrendPeriod(period) {
@@ -4206,6 +4236,9 @@
         { value: 'statistics', label: 'Klinikens statistik' },
       ];
       if (role !== 'Mottagare') base.splice(1, 0, { value: 'assessment', label: 'Registrera bedömning' });
+      if (role === 'Mottagare' || role === 'Blandbild' || priv === 'Studierektor') {
+        base.push({ value: 'progress', label: priv === 'Studierektor' ? 'Progress' : 'Min progress' });
+      }
       if (priv === 'Studierektor' || priv === 'Administratör' || role === 'Administratör') {
         base.push({ value: 'clinic-overview', label: 'Kliniköversikt' });
         base.push({ value: 'request-stats',   label: 'Förfrågningsöversikt' });
