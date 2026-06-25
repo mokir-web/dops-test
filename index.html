@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.7';
+    const APP_VERSION = 'v3.12.8';
 
     let appData = null;
     let currentUser = null;
@@ -3200,15 +3200,12 @@
                 y: {
                   min: 0.5,
                   max: maxScale + 0.5,
-                  ticks: {
-                    stepSize: 1,
-                    font: { size: 11 },
-                    callback: v => Number.isInteger(v) ? v : ''
+                  afterBuildTicks: scale => {
+                    scale.ticks = [];
+                    for (let i = 1; i <= maxScale; i++) scale.ticks.push({ value: i });
                   },
-                  grid: {
-                    color: ctx => Number.isInteger(ctx.tick.value)
-                      ? 'rgba(0,0,0,0.07)' : 'transparent'
-                  }
+                  ticks: { font: { size: 11 }, callback: v => v },
+                  grid: { color: 'rgba(0,0,0,0.13)', lineWidth: 1 }
                 }
               },
               plugins: {
@@ -3906,6 +3903,7 @@
       html += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px;">';
       html += `<div style="background:#3d5c4a;color:#f0ede8;border-radius:8px;padding:14px 20px;min-width:120px;text-align:center;"><div style="font-size:11px;opacity:0.8;letter-spacing:1px;">TOTALT</div><div style="font-size:28px;font-weight:bold;">${s.total}</div></div>`;
       html += `<div style="background:#4a9e62;color:#f0ede8;border-radius:8px;padding:14px 20px;min-width:120px;text-align:center;"><div style="font-size:11px;opacity:0.8;letter-spacing:1px;">UTFÖRDA</div><div style="font-size:28px;font-weight:bold;">${s.done}</div></div>`;
+      if (s.inaktuell) html += `<div style="background:#9e8e82;color:#f0ede8;border-radius:8px;padding:14px 20px;min-width:120px;text-align:center;"><div style="font-size:11px;opacity:0.8;letter-spacing:1px;">INAKTUELLA</div><div style="font-size:28px;font-weight:bold;">${s.inaktuell}</div></div>`;
       html += `<div style="background:#c8a96e;color:#f0ede8;border-radius:8px;padding:14px 20px;min-width:120px;text-align:center;"><div style="font-size:11px;opacity:0.8;letter-spacing:1px;">VÄNTANDE</div><div style="font-size:28px;font-weight:bold;">${s.pending}</div></div>`;
       html += '</div>';
 
