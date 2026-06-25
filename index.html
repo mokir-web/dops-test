@@ -1105,7 +1105,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.12.6';
+    const APP_VERSION = 'v3.12.7';
 
     let appData = null;
     let currentUser = null;
@@ -3084,6 +3084,7 @@
           html += `<div style="margin-bottom:24px;background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:16px;max-width:700px;">
             <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
               <span style="font-weight:bold;font-size:14px;">${esc(q.question)}</span>
+              <span style="font-size:12px;color:#9e8e82;">n=${valid.length}</span>
               ${avg !== null ? `<span style="font-size:13px;color:#3d5c4a;font-weight:bold;">\u00d8\u00a0${avg}</span>` : ''}
             </div>
             <div style="position:relative;height:170px;"><canvas id="${canvasId}"></canvas></div>
@@ -3096,16 +3097,20 @@
         // fritext hanteras separat nedan (pool-metod)
       });
 
-      // Fritextpool: samla ALLA fritext-svar direkt från sparade frågetexter
-      // (hanterar frågetext-ändringar mellan formulärversioner)
-      const freitextQuestions = new Set(
-        formDef.filter(q => q.typ === 'fritext').map(q => q.question.trim().toLowerCase())
+      // Fritextpool: samla ALLA icke-numeriska textsvar oavsett frågenamn
+      // (fångar även svar från äldre formulärversioner med andra frågenamn)
+      const _skalaRadioQs = new Set(
+        formDef.filter(q => q.typ === 'skala' || q.typ === 'radio').map(q => q.question.trim().toLowerCase())
       );
+      const _structuralNames = new Set(['roll','ingrepp','källa','datum','procedur']);
       const freeTextPool = {};
       sorted.forEach(s => {
         s.answers.forEach(a => {
-          if (!a.answer.trim()) return;
-          if (!freitextQuestions.has(a.question.trim().toLowerCase())) return;
+          if (!a.answer || !a.answer.trim() || a.answer.trim().length < 3) return;
+          const qLower = a.question.trim().toLowerCase();
+          if (_skalaRadioQs.has(qLower)) return;          // hoppa skalafrågor
+          if (_structuralNames.has(qLower)) return;        // hoppa strukturella
+          if (/^\d+(\.\d+)?$/.test(a.answer.trim())) return; // hoppa rena siffror
           const key = a.question.trim();
           if (!freeTextPool[key]) freeTextPool[key] = [];
           freeTextPool[key].push({ ts: s.ts, text: a.answer.trim(), registrar: s.registrar });
@@ -3156,7 +3161,7 @@
             pointBackgroundColor: '#3d5c4a',
             pointRadius: 5,
             pointHoverRadius: 7,
-            spanGaps: false
+            spanGaps: true
           }];
 
           if (avgVal !== null) {
