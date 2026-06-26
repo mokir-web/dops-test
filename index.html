@@ -1117,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.16.4';
+    const APP_VERSION = 'v3.16.5';
 
     let appData = null;
     let currentUser = null;
@@ -3429,24 +3429,26 @@
     function updateAssessmentBadge() {
       const data = bgGet('myAssessments_received');
       if (!data || !currentUser) return;
-      const key        = 'dops_rec_seen_' + currentUser.email;
-      const serverSeen = currentUser.seenAssessmentCount || 0;
-      const localSeen  = parseInt(localStorage.getItem(key) || '0');
-      const lastSeen   = Math.max(serverSeen, localSeen);
-      const newCount   = Math.max(0, data.length - lastSeen);
-      const badge      = document.getElementById('my-assessments-badge');
+      const lastReadAt = currentUser.lastReadAt
+        || localStorage.getItem('dops_last_read_' + currentUser.email)
+        || '';
+      const newCount = lastReadAt
+        ? data.filter(a => (a.timestamp || '') > lastReadAt).length
+        : data.length;
+      const badge = document.getElementById('my-assessments-badge');
       if (!badge) return;
       badge.textContent = newCount > 0 ? String(newCount) : '';
       badge.classList.toggle('hidden', newCount === 0);
     }
 
     function clearAssessmentBadge() {
-      const data = bgGet('myAssessments_received');
-      if (!data || !currentUser) return;
-      const count = data.length;
-      localStorage.setItem('dops_rec_seen_' + currentUser.email, String(count));
-      currentUser.seenAssessmentCount = count;
-      api('setSeenAssessmentCount', { email: currentUser.email, count }).catch(() => {});
+      if (!currentUser) return;
+      const pad = n => String(n).padStart(2, '0');
+      const now = new Date();
+      const lastReadAt = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+      localStorage.setItem('dops_last_read_' + currentUser.email, lastReadAt);
+      currentUser.lastReadAt = lastReadAt;
+      api('setLastReadAt', { email: currentUser.email, lastReadAt }).catch(() => {});
       updateAssessmentBadge();
     }
 
