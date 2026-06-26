@@ -1117,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.16.5';
+    const APP_VERSION = 'v3.16.6';
 
     let appData = null;
     let currentUser = null;
@@ -4708,7 +4708,11 @@
       } catch(e) { /* tyst */ }
     }
 
-    function clearCache() {
+    async function clearCache() {
+      // Synka lastReadAt till Sheets innan rensning — annars visar alla bedömningar som nya vid omloggning
+      if (currentUser?.lastReadAt) {
+        try { await api('setLastReadAt', { email: currentUser.email, lastReadAt: currentUser.lastReadAt }); } catch(e) {}
+      }
       localStorage.clear();
       location.reload();
     }
