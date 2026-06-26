@@ -1117,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.16.6';
+    const APP_VERSION = 'v3.16.8';
 
     let appData = null;
     let currentUser = null;
@@ -4449,7 +4449,20 @@
       ]);
       const [ov, myRec, mySent, stat, inb] = ps;
       if (ov.status    === 'fulfilled') bgSet('myOverview', ov.value);
-      if (myRec.status  === 'fulfilled' && myRec.value  !== undefined) { bgSet('myAssessments_received', myRec.value);  updateAssessmentBadge(); }
+      if (myRec.status  === 'fulfilled' && myRec.value  !== undefined) {
+        bgSet('myAssessments_received', myRec.value);
+        // Migration-init: om lastReadAt aldrig satts, sätt det till nu så att befintliga bedömningar inte
+        // visas som nya (gäller första inloggning med timestamp-baserat system)
+        if (!currentUser.lastReadAt && !localStorage.getItem('dops_last_read_' + email)) {
+          const _pad = n => String(n).padStart(2,'0');
+          const _now = new Date();
+          const _ts  = `${_now.getFullYear()}-${_pad(_now.getMonth()+1)}-${_pad(_now.getDate())} ${_pad(_now.getHours())}:${_pad(_now.getMinutes())}`;
+          currentUser.lastReadAt = _ts;
+          localStorage.setItem('dops_last_read_' + email, _ts);
+          api('setLastReadAt', { email, lastReadAt: _ts }).catch(() => {});
+        }
+        updateAssessmentBadge();
+      }
       if (mySent.status === 'fulfilled' && mySent.value !== undefined) bgSet('myAssessments_sent', mySent.value);
       if (stat.status   === 'fulfilled') bgSet('statistics_' + klinikId, stat.value);
       if (inb.status    === 'fulfilled' && inb.value    !== undefined) bgSet('inbox_' + email, inb.value);
