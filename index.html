@@ -494,6 +494,8 @@
         <div id="registrar-display" class="display-field"></div>
       </div>
 
+      <div style="display:flex;gap:20px;align-items:flex-start;">
+      <div style="flex:1;min-width:0;">
       <div class="field" id="f3">
         <label class="field-label">Mottagarens kategori *</label>
         <div class="radio-group" id="category-group">
@@ -515,6 +517,15 @@
         <label class="field-label">Formulärtyp *</label>
         <div class="radio-group" id="form-type-group"></div>
       </div>
+      </div><!-- /flex-left -->
+      <div style="width:190px;flex-shrink:0;background:#f5f1ec;border:1px solid #d8cfc5;border-radius:6px;padding:12px 14px;font-size:12px;color:#6b5c52;line-height:1.7;">
+        <div style="font-weight:bold;color:#2a1f18;margin-bottom:6px;font-size:13px;">⌨ Tangentbordsnavigering</div>
+        <div><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:11px;">Tab</kbd> / <kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:11px;">⇧ Tab</kbd> &nbsp;byter fält</div>
+        <div><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:11px;">↑ ↓</kbd> &nbsp;v&#228;ljer alternativ</div>
+        <div><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:11px;">Space</kbd> &nbsp;markerar val</div>
+        <div style="margin-top:8px;font-style:italic;font-size:11px;color:#9e8e82;">Alternativ till musklick</div>
+      </div>
+      </div><!-- /flex-wrap -->
 
       <div class="field hidden" id="f-till-bedomning" style="margin-top:16px;">
         <button class="btn-primary" id="till-bedomning-btn" onclick="tillBedomning()" disabled style="width:auto;">Till bedömning →</button>
@@ -538,7 +549,7 @@
         <h2 style="color:#3d5c4a;margin-bottom:8px;">Bedömning skickad!</h2>
         <p id="confirm-recipient" style="color:#6b5c52;font-size:16px;margin-bottom:24px;"></p>
           <div id="confirm-time-saving" class="hidden" style="background:#f5f1ec;border:1.5px solid #d8cfc5;border-radius:8px;padding:20px;margin-bottom:28px;text-align:left;">
-          <div style="font-size:11px;letter-spacing:1px;color:#6b5c52;margin-bottom:10px;">UPPSKATTAD TIDSBESPARING J&#196;MF&#214;RT PAPPER</div>
+          <div style="font-size:18px;font-weight:bold;color:#3d5c4a;margin-bottom:12px;">Uppskattad tidsbesparing j&#228;mf&#246;rt papper</div>
           <div id="confirm-time-this" style="font-size:28px;font-weight:bold;color:#3d5c4a;line-height:1.1;"></div>
           <div id="confirm-time-total" style="font-size:13px;color:#9e8e82;margin-top:12px;"></div>
           <div id="confirm-time-context"></div>
@@ -679,6 +690,18 @@
 
         <div class="section-header">Skalbeskrivningar</div>
         <p>Alla skalfrågor visar en beskrivning av vad varje nivå innebär direkt i formuläret. Ankarpunkter för nivå 1 (bristfällig/otillfredsställande), 3 (acceptabel/tillfredsställande) och 5 eller 6 (utmärkt) är hämtade ordagrant från respektive bedömningsmall. Mellannivåerna 2 och 4 är interpolerade.</p>
+
+        <div class="section-header">Navigation och tangentbordsanv&#228;ndning</div>
+        <p>MoraDOPS navigeras via sidopanelen till v&#228;nster. P&#229; mobil &#246;ppnas menyn via hamburgerikonen uppe till v&#228;nster.</p>
+        <p><strong>Allm&#228;n navigering:</strong> Klicka i sidopanelen f&#246;r att byta sektion. Sidor laddar automatiskt och visar alltid aktuell data. Anv&#228;nd <kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">Tab</kbd> f&#246;r att navigera mellan interaktiva element med tangentbordet.</p>
+        <p><strong>Registrering av bed&#246;mning:</strong> Formulär navigeras smidigt med tangentbord som alternativ till musklick.</p>
+        <ul style="line-height:1.9;margin:8px 0 0 0;padding-left:20px;">
+          <li><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">Tab</kbd> / <kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">&#8679; Tab</kbd> — byter f&#228;lt fram och tillbaka</li>
+          <li><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">↑ ↓</kbd> — navigerar bland svarsalternativ i radioknappar</li>
+          <li><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">Space</kbd> — markerar valt alternativ</li>
+          <li><kbd style="background:#e8e2db;border:1px solid #c4b8ac;border-radius:3px;padding:1px 5px;font-size:12px;">Enter</kbd> — bekr&#228;ftar val i dropdown-listor</li>
+        </ul>
+        <p style="color:#9e8e82;font-size:14px;">Tangentbordsanv&#228;ndning &#228;r ett alternativ f&#246;r snabbare navigering, s&#228;rskilt anv&#228;ndbart vid registrering av m&#229;nga bed&#246;mningar i f&#246;ljd.</p>
 
         <div class="section-header">Behörighetsnivåer</div>
         <p>Systemet använder en hierarki för vem som kan bedöma vem. Specialister (Spec) kan bedöma alla. ST-läkare kan bedöma AT- och BT-läkare. Rollen sätts vid registrering och kan ändras under Min profil. Det är vid registrering och under profil möjligt att välja om användaren ska både kunna registrera och ta emot bedömningar.</p>
@@ -1116,7 +1139,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.17.1';
+    const APP_VERSION = 'v3.17.2';
 
     let appData = null;
     let currentUser = null;
@@ -1231,7 +1254,34 @@
     }
 
     // ── Boot ─────────────────────────────────────────────────────
+    let _postLoginDest = null; // sätts av token-autoinloggning, läses av bootApp
+
     window.onload = async function() {
+      // Kontrollera URL-parameter för e-postlänks-autoinloggning
+      try {
+        const _p = new URLSearchParams(window.location.search);
+        const _tok = _p.get('t');
+        if (_tok) {
+          history.replaceState({}, '', window.location.pathname); // rensa token från URL
+          const _r = await api('loginWithToken', { token: _tok });
+          if (_r && !_r.error && !_r.locked) {
+            _postLoginDest = _r.dest || null;
+            const _clean = Object.assign({}, _r);
+            delete _clean.dest;
+            currentUser = _clean;
+            localStorage.setItem('dops_user', JSON.stringify(currentUser));
+            bootApp();
+            try {
+              appData = await api('getData');
+              localStorage.setItem('dops_appdata', JSON.stringify({ ts: Date.now(), data: appData }));
+              populateLocationDropdown();
+              prefillAssessment();
+            } catch(_e) {}
+            return;
+          }
+        }
+      } catch(_e) {}
+      // Normalt boot-flöde
       // Cache-busting: rensa localStorage om APP_VERSION har ändrats sedan sist
       const storedVersion = localStorage.getItem('dops_deployed_version');
       if (storedVersion && storedVersion !== APP_VERSION) {
@@ -1316,9 +1366,15 @@
       prefillProfile();
       setInterval(pollForUpdates, 60000);
       loadInboxBadge().then(() => {
-        const hasUnread = (inboxData?.inbox || []).some(r => !r.read);
-        if (hasUnread) showPanel('inbox');
-        else goToStartPage();
+        if (_postLoginDest) {
+          const d = _postLoginDest;
+          _postLoginDest = null;
+          showPanel(d);
+        } else {
+          const hasUnread = (inboxData?.inbox || []).some(r => !r.read);
+          if (hasUnread) showPanel('inbox');
+          else goToStartPage();
+        }
       });
       setTimeout(backgroundLoad, 100);
     }
@@ -2294,21 +2350,26 @@
     async function exportCoSelected() {
       if (_isProcessing) return;
       const btn = document.querySelector('#co-actions .btn-primary');
+      const origBtnText = btn?.textContent || 'Exportera';
+      if (btn) { btn.textContent = 'Exporterar\u2026'; btn.disabled = true; }
       lockUI();
       const selected = [...document.querySelectorAll('.co-checkbox:checked')]
         .map(cb => clinicAssessments[parseInt(cb.dataset.idx)]);
-      if (!selected.length) { alert('Markera minst en bedömning.'); unlockUI(); return; }
+      if (!selected.length) { alert('Markera minst en bedömning.'); if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); return; }
       const filterInfo = {
         name: 'Kliniköversikt',
         clinic: currentUser.clinic,
-        period: `${document.getElementById('co-date-from').value || '…'} – ${document.getElementById('co-date-to').value || new Date().toISOString().slice(0,10)}`
+        period: `${document.getElementById('co-date-from').value || '\u2026'} \u2013 ${document.getElementById('co-date-to').value || new Date().toISOString().slice(0,10)}`
       };
-      setStatus('co-export-status', '⏳ Genererar dokument...', false);
       try {
         const result = await api('exportAssessmentsToDoc', { email: currentUser.email, assessments: selected, filterInfo });
-        setStatus('co-export-status', `✓ ${result.count} bedömning(ar) skickade till ${currentUser.email}`, false);
-        unlockUI();
-      } catch(err) { setStatus('co-export-status', err.message, true); unlockUI(); }
+        if (btn) { btn.textContent = '\u2713 Skickat!'; }
+        document.querySelectorAll('.co-checkbox:checked').forEach(cb => { cb.checked = false; });
+        document.getElementById('co-select-all').checked = false;
+        updateCoSelectedCount();
+        document.getElementById('co-export-status').textContent = '';
+        setTimeout(() => { if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); }, 2000);
+      } catch(err) { setStatus('co-export-status', err.message, true); if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); }
     }
 
     let allAdminUsers = [];
@@ -2815,26 +2876,30 @@
     async function exportSelected() {
       if (_isProcessing) return;
       const btn = document.querySelector('#assessment-actions .btn-primary');
+      const origBtnText = btn?.textContent || 'Exportera';
+      if (btn) { btn.textContent = 'Exporterar\u2026'; btn.disabled = true; }
       lockUI();
       const selected = [...document.querySelectorAll('.assessment-checkbox:checked')]
         .map(cb => currentAssessments[parseInt(cb.dataset.idx)]);
-      if (!selected.length) { alert('Markera minst en bedömning.'); unlockUI(); return; }
+      if (!selected.length) { alert('Markera minst en bedömning.'); if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); return; }
       const dateFrom = document.getElementById('filter-date-from').value;
       const dateTo   = document.getElementById('filter-date-to').value;
       const period   = (dateFrom || dateTo)
-        ? `${dateFrom || '…'} – ${dateTo || new Date().toISOString().slice(0,10)}`
-        : `Alla — ${new Date().toISOString().slice(0,10)}`;
+        ? `${dateFrom || '\u2026'} \u2013 ${dateTo || new Date().toISOString().slice(0,10)}`
+        : `Alla \u2014 ${new Date().toISOString().slice(0,10)}`;
       const filterInfo = {
         name:   `${currentUser.firstName} ${currentUser.lastName}`,
         clinic:  currentUser.clinic,
         period
       };
-      setStatus('export-status', '⏳ Genererar dokument och skickar mail...', false);
       try {
         const result = await api('exportAssessmentsToDoc', { email: currentUser.email, assessments: selected, filterInfo });
-        setStatus('export-status', `✓ ${result.count} bedömning(ar) skickade till ${currentUser.email}`, false);
-        unlockUI();
-      } catch(err) { setStatus('export-status', err.message, true); unlockUI(); }
+        // Bekräftelse på knappen, avmarkera alla
+        if (btn) { btn.textContent = '\u2713 Skickat!'; }
+        document.querySelectorAll('.assessment-checkbox:checked').forEach(cb => { cb.checked = false; });
+        document.getElementById('export-status').textContent = '';
+        setTimeout(() => { if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); }, 2000);
+      } catch(err) { setStatus('export-status', err.message, true); if (btn) { btn.textContent = origBtnText; btn.disabled = false; } unlockUI(); }
     }
 
     // ── Profile ───────────────────────────────────────────────────
@@ -2916,8 +2981,8 @@
           const opt = document.createElement('option');
           opt.value = o.value; opt.textContent = o.label; startSel.appendChild(opt);
         });
-        const saved = localStorage.getItem('dops_startpage_' + (currentUser?.email || ''));
-        startSel.value = saved || '';
+        const saved = localStorage.getItem('dops_startpage_' + (currentUser?.email || '')) || currentUser?.startPage || '';
+        startSel.value = saved;
       }
       if (s('profile-current-pin'))  s('profile-current-pin').value  = '';
       if (s('profile-new-pin'))      s('profile-new-pin').value      = '';
