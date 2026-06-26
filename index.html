@@ -1117,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.16.8';
+    const APP_VERSION = 'v3.16.9';
 
     let appData = null;
     let currentUser = null;
@@ -1929,7 +1929,10 @@
 
         // Tidsbesparing — jämför faktisk tid mot referenstid (kol K i Formulärtyper)
         const normType    = (formType || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const refSec      = (appData?.timeSavings?.[normType] || 0) * 60;
+        const refMins     = appData?.timeSavings?.[formType]
+                          || Object.entries(appData?.timeSavings || {}).find(([k]) => k.toLowerCase() === normType)?.[1]
+                          || 0;
+        const refSec      = refMins * 60;
         const savedSec    = refSec > 0 ? refSec - elapsedSec : 0;
         const confirmTimeEl = document.getElementById('confirm-time-saving');
         if (savedSec > 30 && confirmTimeEl) {
