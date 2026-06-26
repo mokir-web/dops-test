@@ -1117,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.16.2';
+    const APP_VERSION = 'v3.16.4';
 
     let appData = null;
     let currentUser = null;
@@ -1380,6 +1380,7 @@
       // Progresssida: Mottagare, Blandbild samt Studierektor
       const progressBtn = document.getElementById('nav-btn-progress');
       const _role = currentUser?.userRole || '';
+      const isAdminRole = !hasPriv && _role === 'Administratör';
       const showProgress = (_role === 'Mottagare' || _role === 'Blandbild') || isStudierektor;
       if (progressBtn) {
         progressBtn.classList.toggle('hidden', !showProgress);
