@@ -641,12 +641,12 @@
       <h2 id="progress-title">Min progress</h2>
       <div id="progress-recipient-row" class="hidden field" style="max-width:400px;margin-bottom:12px;">
         <label class="field-label">Läkare</label>
-        <select id="progress-recipient" onchange="onProgressRecipientChange()" style="width:100%;"></select>
+        <select id="progress-recipient" onchange="onProgressRecipientChange()" style="width:100%;" disabled></select>
       </div>
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">
         <div class="field" style="flex:1 1 200px;max-width:320px;margin:0;">
           <label class="field-label">Formulärtyp</label>
-          <select id="progress-formtype" onchange="loadProgressData()" style="width:100%;"></select>
+          <select id="progress-formtype" onchange="loadProgressData()" style="width:100%;" disabled></select>
         </div>
         <div class="field" style="min-width:140px;margin:0;">
           <label class="field-label">Från</label>
@@ -763,8 +763,10 @@
         <button class="btn-secondary btn-small" onclick="showClinicList()" style="margin-bottom:16px;">← Alla kliniker</button>
         <div id="admin-clinic-info"></div>
         <div class="section-header" style="margin-top:20px;">Användare</div>
-        <div class="field">
-          <input type="text" id="admin-user-search" placeholder="Sök namn eller e-post..." oninput="filterAdminUsers()" style="max-width:400px;">
+        <div class="field" style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+          <input type="text" id="admin-user-search" placeholder="Sök namn eller e-post..." oninput="filterAdminUsers()" style="max-width:340px;flex:1 1 200px;">
+          <button class="btn-secondary btn-small" onclick="runInaktivering(this)" style="white-space:nowrap;">Kör inaktivering</button>
+          <span id="inaktivering-status" style="font-size:13px;color:#3d5c4a;align-self:center;"></span>
         </div>
         <div id="admin-users-list" style="margin-top:12px;"></div>
       </div>
@@ -785,6 +787,12 @@
           </div>
           <input type="hidden" id="edit-klinikid">
           <div class="field"><label class="field-label">Nytt lösenord (lämna tomt för oförändrat)</label><input type="password" id="edit-pin" maxlength="6" placeholder="4–6 siffror"></div>
+          <div class="field" style="margin-top:8px;">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:15px;">
+              <input type="checkbox" id="edit-inaktiverad" style="width:18px;height:18px;accent-color:#9e2a18;">
+              <span>Markera som inaktiverad</span>
+            </label>
+          </div>
           <input type="hidden" id="edit-email">
           <hr style="margin:16px 0;">
           <div style="font-weight:bold;font-size:16px;margin-bottom:10px;">Privilegier</div>
@@ -1109,7 +1117,7 @@
   </div><!-- /app -->
 
   <script>
-    const APP_VERSION = 'v3.15.1';
+    const APP_VERSION = 'v3.16.2';
 
     let appData = null;
     let currentUser = null;
@@ -1117,6 +1125,7 @@
     let currentSection = null;
     let savedAnswers = {};
     let currentAssessmentRole = 'received';
+    let _assessmentStartTime  = 0; // sätts när bedömningspanelen öppnas, används för tidsbesparing
     let currentAssessments = [];
     let availableFormTypes = [];
     let activePrivilege = null; // null = standardvy, 'Studierektor', 'Administratör'
@@ -1385,9 +1394,12 @@
         if (hasPriv) {
           btn.classList.add('hidden');
         } else {
-          // Visa – men respektera Mottagare-only-regeln för assessment
           if (id === 'nav-btn-assessment') {
-            btn.classList.toggle('hidden', currentUser?.userRole === 'Mottagare');
+            // Dölj för Mottagare och användare med adminroll
+            btn.classList.toggle('hidden', _role === 'Mottagare' || isAdminRole);
+          } else if (id === 'nav-btn-inbox') {
+            // Mottagare skickar och tar inte emot förfrågningar — göm panelen
+            btn.classList.toggle('hidden', _role === 'Mottagare');
           } else {
             btn.classList.remove('hidden');
           }
@@ -1464,12 +1476,12 @@
     }
 
     // ── Login ─────────────────────────────────────────────────────
-    async function doLogin() {
+    async function doLogin(overrideEmail, overridePin) {
       if (_isProcessing) return;
       const btn = document.querySelector('#login-view .btn-primary');
       lockUI();
-      const email = document.getElementById('login-email').value.trim();
-      const pin   = document.getElementById('login-pin').value.trim();
+      const email = overrideEmail || document.getElementById('login-email').value.trim();
+      const pin   = overridePin   || document.getElementById('login-pin').value.trim();
       if (!email || !pin) { setStatus('login-status', 'Fyll i e-post och PIN.', true); unlockUI(); return; }
       try {
         const result = await api('login', { email: email.trim().toLowerCase(), pin: pin.trim() });
@@ -1858,7 +1870,8 @@
         const recipientEmail = await api('getRecipientEmail', { recipientFullName: recipient });
         const recipientName  = recipient.split(' -- ')[0];
         const registrarName  = `${currentUser.firstName} ${currentUser.lastName}`;
-        const result = await api('saveAnswers', { answerList, recipientEmail, recipientName, registrarName, formType, registrarEmail: currentUser.email, startTime: window._formStartTime || null });
+        const elapsedSec = _assessmentStartTime > 0 ? Math.round((Date.now() - _assessmentStartTime) / 1000) : 0;
+        const result = await api('saveAnswers', { answerList, recipientEmail, recipientName, registrarName, formType, registrarEmail: currentUser.email, elapsedSeconds: elapsedSec });
         // Markera berörda cachar inaktuella: innehåll visas direkt, revalidering hämtar nya bedömningen
         bgMarkStale('myOverview');
         bgMarkStale('myAssessments_sent');
@@ -1913,23 +1926,26 @@
         document.getElementById('confirm-recipient').textContent =
           formType + ' · Mottagare: ' + recipientShortName;
 
-        // Tidsbesparing
-        const paperMins = (appData && appData.timeSavings && appData.timeSavings[formType]) || 0;
-        const savedMins = (result.netMinutesSaved !== undefined && result.netMinutesSaved !== null)
-          ? result.netMinutesSaved
-          : paperMins;
+        // Tidsbesparing — jämför faktisk tid mot referenstid (kol K i Formulärtyper)
+        const normType    = (formType || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const refSec      = (appData?.timeSavings?.[normType] || 0) * 60;
+        const savedSec    = refSec > 0 ? refSec - elapsedSec : 0;
         const confirmTimeEl = document.getElementById('confirm-time-saving');
-        if (savedMins > 0 && paperMins > 0 && confirmTimeEl) {
+        if (savedSec > 30 && confirmTimeEl) {
           confirmTimeEl.classList.remove('hidden');
-          document.getElementById('confirm-time-this').textContent =
-            savedMins + ' minuter sparade jämfört med pappersregistrering';
-          api('getMyOverview', { email: currentUser.email }).then(ov => {
-            const tot = (ov.totalMinutesSaved || 0) + savedMins;
+          const mins = Math.floor(savedSec / 60), secs = Math.round(savedSec % 60);
+          const savedStr = mins > 0 ? `${mins} min ${secs > 0 ? secs + ' sek' : ''}`.trim() : `${secs} sek`;
+          document.getElementById('confirm-time-this').textContent = savedStr + ' sparade j\u00e4mf\u00f6rt med pappersregistrering';
+          const ov = bgGet('myOverview');
+          const tot = ov?.totalMinutesSaved || 0;
+          if (tot > 0) {
             const h = Math.floor(tot / 60), m = tot % 60;
-            const totStr = h > 0 ? h + ' tim ' + m + ' min' : m + ' min';
             document.getElementById('confirm-time-total').textContent =
-              'Totalt sparat med MoraDOPS: ' + totStr;
-          }).catch(() => {});
+              'Totalt med MoraDOPS: ' + (h > 0 ? `${h} tim ${m} min` : `${m} min`) + ' (referenstid)';
+          } else {
+            document.getElementById('confirm-time-total').textContent = '';
+          }
+          document.getElementById('confirm-time-context').textContent = '';
         } else if (confirmTimeEl) {
           confirmTimeEl.classList.add('hidden');
         }
@@ -2301,7 +2317,7 @@
       el.innerHTML = '<p style="color:#9e8e82;font-size:13px;">Hämtar innehåll…</p>';
       try {
         // Hämta alltid alla användare för admin (filtrera lokalt)
-        const result = await api('getAllUsers', { klinikId: '*' });
+        const result = await api('getAllUsers', { klinikId: '*', includeInaktiverade: true });
         const allUsers = result || [];
         allAdminUsers = allUsers;
 
@@ -2471,6 +2487,8 @@
       const userRoleSel = document.getElementById('edit-userrole');
       if (jobRoleSel)  { jobRoleSel.value  = u.jobRole  || ''; }
       if (userRoleSel) { userRoleSel.value = u.userRole || ''; }
+      const inaktChk = document.getElementById('edit-inaktiverad');
+      if (inaktChk) inaktChk.checked = !!(u.inaktiverad);
       show('admin-edit-overlay', true);
       loadUserPrivileges(u.email);
     }
@@ -2522,6 +2540,7 @@
         jobRole:   document.getElementById('edit-jobrole').value,
         userRole:  document.getElementById('edit-userrole').value,
         clinic, klinikId,
+        inaktiverad: !!(document.getElementById('edit-inaktiverad')?.checked),
       };
       const pin = document.getElementById('edit-pin').value.trim();
       if (pin) { if (!/^\d{4,6}$/.test(pin)) { setStatus('edit-status', 'PIN måste vara 4–6 siffror.', true); return; } updates.newPin = pin; }
@@ -2534,6 +2553,29 @@
         localStorage.removeItem('dops_appdata');
         setTimeout(() => { closeUserEdit(); loadClinicDetail(currentAdminKlinikId); }, 800);
       } catch(err) { setStatus('edit-status', err.message, true); }
+    }
+
+    async function runInaktivering(btn) {
+      const statusEl  = document.getElementById('inaktivering-status');
+      const origText  = btn?.textContent || 'Kör inaktivering';
+      if (btn) { btn.textContent = 'Kör\u2026'; btn.disabled = true; }
+      if (statusEl) statusEl.textContent = '';
+      try {
+        const result = await api('runInaktivering');
+        if (statusEl) {
+          statusEl.textContent = result.inactivated > 0
+            ? `\u2713 Inaktiverade ${result.inactivated} anv\u00e4ndare`
+            : '\u2713 Inga nya att inaktivera';
+          setTimeout(() => { statusEl.textContent = ''; }, 4000);
+        }
+        if (result.inactivated > 0) {
+          localStorage.removeItem('dops_appdata');
+          loadClinicDetail(currentAdminKlinikId);
+        }
+      } catch(err) {
+        if (statusEl) { statusEl.style.color = '#9e2a18'; statusEl.textContent = esc(err.message); setTimeout(() => { statusEl.textContent = ''; statusEl.style.color = '#3d5c4a'; }, 4000); }
+      }
+      if (btn) { btn.textContent = origText; btn.disabled = false; }
     }
 
     async function deleteUserFromAdmin() {
@@ -2827,7 +2869,12 @@
         (g('profile-startpage')?.value   || '')                     !== p.startPage ||
         !!(g('profile-current-pin')?.value) ||
         !!(g('profile-new-pin')?.value);
-      btn.disabled = !dirty;
+      if (dirty) {
+        btn.textContent = 'Spara \u00e4ndringar';
+        btn.disabled = false;
+      } else {
+        btn.disabled = true;
+      }
     }
 
     function prefillProfile() {
@@ -2954,7 +3001,7 @@
         const s3 = id => document.getElementById(id);
         if (s3('profile-current-pin')) s3('profile-current-pin').value = '';
         if (s3('profile-new-pin'))     s3('profile-new-pin').value     = '';
-        if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = true; }
+        if (saveBtn) { saveBtn.textContent = '\u00c4ndringar sparade'; saveBtn.disabled = true; }
         _snapshotProfile();
       } catch(err) { setStatus('profile-role-status', err.message, true); if (saveBtn) { saveBtn.textContent = origSaveBtnText; saveBtn.disabled = false; } }
     }
@@ -3041,9 +3088,9 @@
       try {
         const result = await api('registerUser', { user });
         if (result.error) { setStatus('reg-status', result.error, true); return; }
-        localStorage.removeItem('dops_appdata'); // ny klinik ska synas nästa gång
-        setStatus('reg-status', '✓ Konto skapat! Du kan nu logga in.', false);
-        setTimeout(() => showLoginView('login'), 2000);
+        localStorage.removeItem('dops_appdata');
+        setStatus('reg-status', 'Konto skapat! Loggar in\u2026', false);
+        await doLogin(user.email, user.pin);
       } catch(err) { setStatus('reg-status', err.message, true); }
     }
 
@@ -3094,6 +3141,7 @@
             users.forEach(u => recSel.appendChild(new Option(u.name, u.email)));
           } catch(e) { console.warn('getProgressUsers:', e); }
           if (statusEl) statusEl.innerHTML = '';
+          recSel.disabled = recSel.options.length <= 1;
         }
       }
 
@@ -3115,6 +3163,7 @@
             if (statusEl) statusEl.innerHTML = '';
           }
         }
+        ftSel.disabled = ftSel.options.length <= 1;
       }
       loadProgressData();
     }
@@ -3122,6 +3171,7 @@
     async function onProgressRecipientChange() {
       const ftSel = document.getElementById('progress-formtype');
       ftSel.innerHTML = '<option value="">-- Välj formulärtyp --</option>';
+      ftSel.disabled = true;
       document.getElementById('progress-content').innerHTML = '';
       const email = document.getElementById('progress-recipient')?.value;
       if (email) {
@@ -3129,6 +3179,7 @@
           const fts = await api('getProgressFormTypes', { recipientEmail: email });
           fts.forEach(ft => ftSel.appendChild(new Option(ft, ft)));
         } catch(e) { console.warn('getProgressFormTypes:', e); }
+        ftSel.disabled = ftSel.options.length <= 1;
       }
     }
 
@@ -4372,25 +4423,36 @@
       if (!currentUser) return;
       const email    = currentUser.email;
       const klinikId = activeKlinikId || currentUser.klinikId || '*';
-      // Parallella anrop: varje cache-nyckel fylls så snabbt som möjligt (latensen döljs)
-      try {
-        const [ov, myRec, mySent, stat, inb] = await Promise.allSettled([
-          api('getMyOverview',    { email, klinikId: currentUser.klinikId }),
-          api('getMyAssessments', { email, role: 'received', filters: {} }),
-          api('getMyAssessments', { email, role: 'sent',     filters: {} }),
-          api('getStatistics',    { filters: {}, klinikId }),
-          api('getAssessmentRequests', { email })
-        ]);
-        if (ov.status    === 'fulfilled') bgSet('myOverview',             ov.value);
-        if (myRec.status === 'fulfilled' && myRec.value !== undefined) { bgSet('myAssessments_received', myRec.value); updateAssessmentBadge(); }
-        if (mySent.status=== 'fulfilled' && mySent.value !== undefined) bgSet('myAssessments_sent',     mySent.value);
-        if (stat.status  === 'fulfilled') bgSet('statistics_' + klinikId, stat.value);
-        if (inb.status   === 'fulfilled') bgSet('inbox_' + email,         inb.value);
-      } catch(e) {}
+      const role     = currentUser?.userRole || '';
+      const priv     = activePrivilege;
+      const hasPriv  = priv === 'Studierektor' || priv === 'Administratör';
 
-      // Förladda Min progress-data för Mottagare/Blandbild (sekventiell följdbatch)
-      const _bg_role = currentUser?.userRole || '';
-      if ((_bg_role === 'Mottagare' || _bg_role === 'Blandbild') && !activePrivilege) {
+      // Privilegierade roller behöver bara statistik (de har egna paneler som laddar on-demand)
+      if (hasPriv) {
+        try {
+          const stat = await api('getStatistics', { filters: {}, klinikId });
+          bgSet('statistics_' + klinikId, stat);
+        } catch(e) {}
+        return;
+      }
+
+      // Roll-baserade parallella anrop — hoppa över data som rollen aldrig visar
+      const ps = await Promise.allSettled([
+        api('getMyOverview',    { email, klinikId: currentUser.klinikId }),
+        role !== 'Registrerare' ? api('getMyAssessments', { email, role: 'received', filters: {} }) : Promise.resolve(undefined),
+        role !== 'Mottagare'    ? api('getMyAssessments', { email, role: 'sent',     filters: {} }) : Promise.resolve(undefined),
+        api('getStatistics',    { filters: {}, klinikId }),
+        role !== 'Mottagare'    ? api('getAssessmentRequests', { email }) : Promise.resolve(undefined)
+      ]);
+      const [ov, myRec, mySent, stat, inb] = ps;
+      if (ov.status    === 'fulfilled') bgSet('myOverview', ov.value);
+      if (myRec.status  === 'fulfilled' && myRec.value  !== undefined) { bgSet('myAssessments_received', myRec.value);  updateAssessmentBadge(); }
+      if (mySent.status === 'fulfilled' && mySent.value !== undefined) bgSet('myAssessments_sent', mySent.value);
+      if (stat.status   === 'fulfilled') bgSet('statistics_' + klinikId, stat.value);
+      if (inb.status    === 'fulfilled' && inb.value    !== undefined) bgSet('inbox_' + email, inb.value);
+
+      // Förladda Min progress för Mottagare/Blandbild (sekventiell följdbatch)
+      if (role === 'Mottagare' || role === 'Blandbild') {
         try {
           const fts = await api('getProgressFormTypes', { recipientEmail: email });
           bgSet('progressFormTypes_' + email, fts);
@@ -4709,7 +4771,7 @@
       });
       closeMenu();
       closeMenu();
-      if (panel === 'assessment')       { resetAssessment(); }
+      if (panel === 'assessment')       { resetAssessment(); _assessmentStartTime = Date.now(); }
       if (panel === 'my-assessments')   { clearAssessmentBadge(); applyFilters(); }
       if (panel === 'statistics') {
         // Visa klinikväljare för global admin
